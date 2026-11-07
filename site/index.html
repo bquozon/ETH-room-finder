@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ETH Room Finder · study spaces & free rooms</title>
+  <meta name="description" content="ETH Room Finder: find a free study space or empty lecture room at ETH Zurich, nearest first, with live occupancy.">
+  <meta name="application-name" content="ETH Room Finder">
+  <meta name="theme-color" content="#1f407a">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>ETH Room Finder</h1>
+      <p class="tagline">Study spaces &amp; free rooms at ETH Zurich</p>
+      <p class="updated" id="updated" aria-live="polite">Loading…</p>
+    </div>
+    <button class="locate" id="locate" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" class="dot"/></svg>
+      <span>Near me</span>
+    </button>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Kind of place">
+    <button role="tab" id="tab-spaces" aria-selected="true" aria-controls="list" data-tab="spaces">Study spaces</button>
+    <button role="tab" id="tab-rooms" aria-selected="false" aria-controls="list" data-tab="rooms">Free rooms</button>
+  </nav>
+
+  <section class="controls">
+    <label class="search">
+      <span class="visually-hidden">Search</span>
+      <input id="q" type="search" placeholder="Search building, room, name…" autocomplete="off">
+    </label>
+    <div class="when" id="when" hidden>
+      <label><span class="visually-hidden">Day</span><select id="day"></select></label>
+      <label><span class="visually-hidden">Time</span><select id="time"></select></label>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Filters"></div>
+  </section>
+
+  <p class="locmsg" id="locmsg" hidden></p>
+  <main id="list" class="list" role="tabpanel" aria-labelledby="tab-spaces" aria-busy="true"></main>
+
+  <footer class="foot">
+    Free-room data builds on <a href="https://github.com/ollie-sara/roominfo_checker">roominfo_checker</a>
+    by Oliver Saravanja (<a href="https://github.com/ollie-sara">@ollie-sara</a>), the original
+    <a href="https://rooms.saravanja.ch">Sick Room Finder</a>. Thank you!<br>
+    Data: ETH Zurich (study-space occupancy, room bookings). Unofficial, not affiliated with ETH.
+  </footer>
+</body>
+</html>

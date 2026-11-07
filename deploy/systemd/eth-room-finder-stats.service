@@ -1,0 +1,15 @@
+[Unit]
+Description=ETH Room Finder: build the traffic report
+OnFailure=eth-room-finder-alert@%n.service
+
+[Service]
+Type=oneshot
+# root: Caddy writes its log readable by root only
+ExecStart=/opt/eth-room-finder/scripts/build_stats.sh
+TimeoutStartSec=5min
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/eth-room-finder-stats

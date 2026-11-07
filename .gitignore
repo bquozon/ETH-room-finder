@@ -1,0 +1,6 @@
+site/data/
+*.log
+.DS_Store
+.claude/
+deploy/docker-web/stats-users.caddy
+deploy/docker-web/.env

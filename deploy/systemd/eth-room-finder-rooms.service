@@ -1,0 +1,19 @@
+[Unit]
+Description=ETH Room Finder: scrape room bookings for the next 7 days
+After=network-online.target
+Wants=network-online.target
+OnFailure=eth-room-finder-alert@%n.service
+
+[Service]
+Type=oneshot
+User=roomfinder
+Group=roomfinder
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -I /opt/eth-room-finder/scripts/scrape_rooms.py
+TimeoutStartSec=20min
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/eth-room-finder/site/data

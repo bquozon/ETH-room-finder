@@ -1,0 +1,46 @@
+// node scripts/test_logic.mjs
+import assert from "node:assert/strict";
+import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus } from "../site/logic.js";
+
+// HG -> CAB is ~220 m
+const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
+assert.ok(d > 200 && d < 240, `HG-CAB ${d}`);
+assert.equal(campusOf("HG"), "Zentrum");
+assert.equal(campusOf("HCI"), "Hönggerberg");
+assert.equal(formatDistance(220), "220 m · 4 min walk");
+
+const at = (h, m = 0) => new Date(2026, 10, 9, h, m); // Monday
+const busy = [
+  ["2026-11-09T10:15:00", "2026-11-09T12:00:00"],
+  ["2026-11-09T12:00:00", "2026-11-09T13:00:00"], // back-to-back
+  ["2026-11-09T15:00:00", "2026-11-09T16:00:00"],
+];
+let s = roomStatus(busy, at(9));
+assert.equal(s.free, true); assert.equal(s.until.getHours(), 10); assert.equal(s.until.getMinutes(), 15);
+s = roomStatus(busy, at(11));
+assert.equal(s.free, false); assert.equal(s.nextFree.getHours(), 13);
+s = roomStatus(busy, at(16, 30));
+assert.equal(s.free, true); assert.equal(s.until.getHours(), 21);
+assert.equal(roomStatus(busy, at(22)).closed, true);
+assert.equal(roomStatus([["2026-11-09T00:00:00", "2026-11-09T23:59:00"]], at(12)).nextFree, null);
+
+const tl = dayTimeline(busy, at(9));
+assert.equal(tl.length, 3);
+assert.ok(Math.abs(tl[0][0] - 3.25 / 14) < 1e-9);
+
+assert.equal(occupancyLevel(null), "unknown");
+assert.equal(occupancyLevel(40), "low");
+assert.equal(occupancyLevel(90), "high");
+// Opening hours. 2026-11-07 is a Saturday.
+const lib = ["Sat - Sun: 08.00 - 17.00", "Mon - Fri: 08.00 - 22.00"];
+assert.equal(openingStatus(lib, false, new Date(2026, 10, 7, 17, 21)).open, false); // the reported bug
+assert.equal(openingStatus(lib, false, new Date(2026, 10, 7, 10)).open, true);
+assert.equal(openingStatus(lib, false, new Date(2026, 10, 7, 10)).today, "08:00–17:00");
+assert.equal(openingStatus(lib, false, at(21, 59)).open, true);
+const cafe = ["Mon - Fri: 07.00 - 20.30", "Sat - Sun: Closed", "Meal time: Mon - Fri: 11.15 - 13.45", "24-hour access via ETH card"];
+assert.equal(openingStatus(cafe, true, at(3)).open, true); // 24h card access
+assert.equal(openingStatus(cafe, true, at(12)).open, false); // meal time
+assert.equal(openingStatus(cafe, true, at(12)).mealNow, true);
+assert.equal(openingStatus(cafe, false, new Date(2026, 10, 8, 12)).today, "Closed");
+assert.equal(openingStatus(["Sun: 10.00 - 16.00"], false, at(12)).open, null); // no line for Monday
+console.log("logic ok");

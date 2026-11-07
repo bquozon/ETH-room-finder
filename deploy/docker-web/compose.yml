@@ -1,0 +1,21 @@
+# The site (static files), attached to the network of the Caddy container that holds ports 80/443.
+# deploy/install.sh writes .env (network, folders) and starts it.
+# Explicit name: Poly+Uni Agenda's compose folder is also called docker-web, and without this both would be the
+# same compose project, so --remove-orphans here would delete the zrh-events containers.
+name: eth-room-finder
+services:
+  eth-room-finder-web:
+    image: caddy:2-alpine
+    container_name: eth-room-finder-web
+    restart: unless-stopped
+    volumes:
+      - ./:/etc/caddy:ro                          # whole folder: Caddyfile + stats-users.caddy, updates seen on reload
+      - ${SITE_DIR}:/srv:ro                       # the timers keep site/data fresh
+      - /var/lib/eth-room-finder-stats:/stats:ro  # GoAccess report
+      - /var/log/eth-room-finder:/logs            # access log for the report
+    networks: [proxy]
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK}

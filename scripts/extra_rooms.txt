@@ -1,0 +1,3 @@
+# Rooms missing from ETH's public room list whose bookings we still want.
+# One per line, "BUILDING FLOOR ROOM" exactly as ETH writes it. Lines starting with # are ignored.
+CAB H 56

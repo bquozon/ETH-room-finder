@@ -1,0 +1,271 @@
+import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus } from "./logic.js";
+
+const ETH = "https://ethz.ch";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const store = {
+  get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+const FILTERS = {
+  spaces: [
+    ["zentrum", "Zentrum", (s) => s.campus === "Zentrum"],
+    ["hongg", "Hönggerberg", (s) => s.campus === "Hönggerberg"],
+    ["open", "Open now", (s) => s.open.open === true],
+    ["live", "Live data", (s) => s.pct != null],
+    ["calm", "Not noisy", (s) => !s.keys.has("um.laut")],
+    ["sockets", "Many sockets", (s) => s.keys.has("aus.stromviel")],
+    ["food", "Food nearby", (s) => s.keys.has("food.mensa") || s.keys.has("food.cafeteria")],
+  ],
+  rooms: [
+    ["zentrum", "Zentrum", (r) => r.campus === "Zentrum"],
+    ["hongg", "Hönggerberg", (r) => r.campus === "Hönggerberg"],
+    ["free", "Free now", (r) => r.status.free],
+    ["big", "50+ seats", (r) => r.seats >= 50],
+  ],
+};
+
+const state = {
+  tab: store.get("tab", "spaces"),
+  on: store.get("filters", { spaces: [], rooms: ["free"] }),
+  q: "",
+  pos: null,       // [lat, lon] once located
+  watch: null,
+  day: 0,          // free rooms: days from today (0-6)
+  time: "now",     // free rooms: "now" or "HH:MM"
+  spaces: [], rooms: [], updated: null,
+};
+
+// The moment the free-rooms tab looks at.
+function when() {
+  const d = new Date();
+  if (state.day === 0 && state.time === "now") return d;
+  d.setDate(d.getDate() + state.day);
+  const [h, m] = (state.time === "now" ? "08:00" : state.time).split(":");
+  d.setHours(+h, +m, 0, 0);
+  return d;
+}
+const isNow = () => state.day === 0 && state.time === "now";
+const whenLabel = () => isNow() ? "now" : `${state.day === 0 ? "today" : state.day === 1 ? "tomorrow" : when().toLocaleDateString("en-GB", { weekday: "short" })} ${hhmm(when())}`;
+
+async function getJSON(path) {
+  const r = await fetch(path, { cache: "no-store" });
+  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  return [await r.json(), r.headers.get("last-modified")];
+}
+
+async function loadSpaces() {
+  const [[spaces], [avail, modified]] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json")]);
+  const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
+  let newest = modified ? new Date(modified) : null;
+  state.spaces = spaces.data.map(({ attributes: a }) => {
+    const l = live.get(a.roomGlobalIdentifier) || {};
+    const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
+    if (ok && l.timestamp && (!newest || new Date(l.timestamp) > newest)) newest = new Date(l.timestamp);
+    return {
+      id: a.roomGlobalIdentifier, title: a.title, description: a.description, building: a.building,
+      campus: a.campus === "ZH" ? "Hönggerberg" : "Zentrum", coord: BUILDINGS[a.building],
+      seats: a.seats, has24h: !!a.has24HourAccess, hours: a.hours || [], img: a.image && ETH + a.image,
+      link: a.locationPageUrl && ETH + a.locationPageUrl,
+      features: a.features || [], keys: new Set((a.features || []).map((f) => f.key)),
+      pct: ok ? l.occupancyPercentage : null, occupancy: l.occupancy, max: l.maxPeople, trend: ok ? l.trend : null,
+    };
+  });
+  state.updated = newest;
+}
+
+async function loadRooms() {
+  const [data] = await getJSON("data/rooms.json");
+  state.rooms = data.rooms.map((r) => ({
+    ...r, name: `${r.building} ${r.floor} ${r.room}`, campus: campusOf(r.building), coord: BUILDINGS[r.building],
+    seats: Number(r.seats) || 0,
+    link: `${ETH}/en/utils/location.html?${new URLSearchParams({ building: r.building, floor: r.floor, room: r.room })}`,
+  }));
+}
+
+// Spaces/rooms with distance attached, filtered and sorted for display.
+function visible() {
+  const now = new Date(), at = when();
+  const list = state.tab === "spaces"
+    ? state.spaces.map((s) => ({ ...s, open: openingStatus(s.hours, s.has24h, now) }))
+    : state.rooms.map((r) => ({ ...r, status: roomStatus(r.busy, at) }));
+  const active = FILTERS[state.tab].filter(([k]) => state.on[state.tab].includes(k));
+  // Campus chips are alternatives (OR); the rest narrow down (AND).
+  const campus = active.filter(([k]) => k === "zentrum" || k === "hongg");
+  const rest = active.filter((f) => !campus.includes(f));
+  const q = state.q.trim().toLowerCase();
+  const items = list
+    .filter((x) => !campus.length || campus.some(([, , f]) => f(x)))
+    .filter((x) => rest.every(([, , f]) => f(x)))
+    .filter((x) => !q || [x.title, x.name, x.description, x.building].some((s) => s && s.toLowerCase().includes(q)))
+    .map((x) => ({ ...x, dist: state.pos && x.coord ? distance(state.pos, x.coord) : null }));
+
+  const byDist = (a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9);
+  if (state.tab === "spaces") {
+    // Near me: closest first, but nudge nearly-full places down so a 5-min-further empty one wins.
+    const score = (s) => state.pos
+      ? (s.dist ?? 1e9) + (s.pct >= 90 ? 600 : s.pct >= 75 ? 250 : 0) + (s.open.open === false ? 1e6 : 0)
+      : (s.pct ?? 101) + (s.open.open === false ? 1000 : 0);
+    items.sort((a, b) => score(a) - score(b));
+  } else {
+    const freeMins = (r) => (r.status.free ? (r.status.until - at) / 6e4 : -1);
+    items.sort((a, b) => (b.status.free - a.status.free) || (state.pos ? byDist(a, b) : freeMins(b) - freeMins(a)));
+  }
+  return items;
+}
+
+const directions = (c) => `https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${c[0]},${c[1]}`;
+
+function hoursLine(s) {
+  const o = s.open;
+  const badge = o.mealNow ? `<b class="medium">Mensa until ${o.mealText.split("–")[1]}</b>`
+    : o.open === true ? `<b class="low">Open now</b>` : o.open === false ? `<b class="high">Closed now</b>` : "";
+  const main = s.has24h ? "24/7 with ETH card" : o.today ? `today ${o.today}` : esc(s.hours[0] || "");
+  const extra = [s.has24h && o.today && (o.today === "Closed" ? "card access only today" : `without card today ${o.today}`), o.mealText && !o.mealNow && `mensa ${o.mealText}`].filter(Boolean);
+  return [badge, main, ...extra].filter(Boolean).join(" · ");
+}
+
+function spaceCard(s) {
+  const lvl = occupancyLevel(s.pct);
+  const trend = s.trend?.startsWith("incr") ? " ↑" : s.trend?.startsWith("decr") ? " ↓" : "";
+  const feats = s.features.filter((f) => ["aus.stromviel", "um.ruhig", "um.laut", "food.mensa", "food.cafeteria", "work.gruppe", "aus.fenster"].includes(f.key));
+  return `<article class="card ${s.img ? "has-img" : ""}">
+    ${s.img ? `<img class="thumb" src="${esc(s.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+    <div>
+      <h2 class="title">${esc(s.title)}</h2>
+      <p class="sub">${esc(s.description)}${s.description ? " · " : ""}${esc(s.campus)}${s.seats ? ` · ${s.seats} seats` : ""}</p>
+      <p class="sub hours">${hoursLine(s)}</p>
+    </div>
+    <div class="side ${lvl}">
+      ${s.pct == null
+        ? `<div class="big unknown">—<small>no live data</small></div>`
+        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy ?? "?"} / ${s.max ?? "?"} people</small></div>`}
+    </div>
+    <div class="meter ${lvl}" role="img" aria-label="${s.pct == null ? "Occupancy unknown" : `${s.pct}% full`}"><i style="width:${s.pct ?? 0}%"></i></div>
+    ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
+    <div class="row"><span class="dist">${formatDistance(s.dist)}</span><span>
+      ${s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">Floor plan</a> · ` : ""}
+      ${s.coord ? `<a href="${directions(s.coord)}" target="_blank" rel="noopener">Directions</a>` : ""}</span></div>
+  </article>`;
+}
+
+function roomCard(r) {
+  const at = when();
+  const st = r.status;
+  const [label, sub, lvl] = st.closed ? ["Closed", "outside 07–21", "unknown"]
+    : st.free ? [`until ${hhmm(st.until)}`, isNow() ? "free" : "free then", "low"]
+    : st.nextFree ? [`from ${hhmm(st.nextFree)}`, "busy, free", "high"]
+    : ["Busy", "rest of day", "high"];
+  const nowFrac = (at.getHours() + at.getMinutes() / 60 - 7) / 14;
+  return `<article class="card">
+    <div>
+      <h2 class="title">${esc(r.name)}</h2>
+      <p class="sub">${esc(r.campus)}${r.seats ? ` · ${r.seats} seats` : ""}</p>
+    </div>
+    <div class="side ${lvl}"><div class="big"><small>${sub}</small>${label}</div></div>
+    <div class="timeline" role="img" aria-label="Bookings that day, 07:00 to 21:00">
+      ${dayTimeline(r.busy, at).map(([a, b]) => `<i style="left:${a * 100}%;width:${(b - a) * 100}%"></i>`).join("")}
+      ${nowFrac > 0 && nowFrac < 1 ? `<b style="left:${nowFrac * 100}%"></b>` : ""}
+    </div>
+    <div class="ticks"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span><span>21</span></div>
+    <div class="row"><span class="dist">${formatDistance(r.dist)}</span><span>
+      <a href="${esc(r.link)}" target="_blank" rel="noopener">Floor plan</a>
+      ${r.coord ? ` · <a href="${directions(r.coord)}" target="_blank" rel="noopener">Directions</a>` : ""}</span></div>
+  </article>`;
+}
+
+function render() {
+  for (const b of document.querySelectorAll("[role=tab]")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
+  $("#list").setAttribute("aria-labelledby", `tab-${state.tab}`);
+  $("#chips").innerHTML = FILTERS[state.tab].map(([k, label]) =>
+    `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Free ${isNow() ? "now" : "then"}` : label}</button>`).join("");
+  $("#when").hidden = state.tab !== "rooms";
+  const items = visible();
+  $("#list").innerHTML = items.length
+    ? items.map(state.tab === "spaces" ? spaceCard : roomCard).join("")
+    : `<p class="empty">${state.tab === "rooms" && state.on.rooms.includes("free")
+      ? `No teaching room is free ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Free”.`
+      : "Nothing matches. Try removing a filter."}</p>`;
+  $("#list").setAttribute("aria-busy", "false");
+  $("#updated").textContent = state.tab === "spaces"
+    ? (state.updated ? `Live occupancy · updated ${hhmm(state.updated)}` : "Live occupancy")
+    : `Room bookings · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} free ${whenLabel()}`;
+}
+
+function locate(on) {
+  const btn = $("#locate"), msg = $("#locmsg");
+  if (!on) {
+    if (state.watch != null) navigator.geolocation.clearWatch(state.watch);
+    Object.assign(state, { watch: null, pos: null });
+    btn.setAttribute("aria-pressed", "false"); msg.hidden = true; store.set("locate", false); render();
+    return;
+  }
+  if (!navigator.geolocation) { msg.textContent = "Your browser can't share location."; msg.hidden = false; return; }
+  btn.dataset.busy = "";
+  state.watch = navigator.geolocation.watchPosition(
+    (p) => {
+      delete btn.dataset.busy;
+      state.pos = [p.coords.latitude, p.coords.longitude];
+      btn.setAttribute("aria-pressed", "true"); store.set("locate", true);
+      msg.hidden = true; render();
+    },
+    (e) => {
+      delete btn.dataset.busy;
+      locate(false);
+      msg.textContent = e.code === 1 ? "Location blocked. Allow it in your browser settings to sort by distance." : "Couldn't get your location. Try again.";
+      msg.hidden = false;
+    },
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 },
+  );
+}
+
+function bind() {
+  $(".tabs").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-tab]"); if (!t) return;
+    state.tab = t.dataset.tab; store.set("tab", state.tab); render();
+  });
+  $("#chips").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-k]"); if (!c) return;
+    const on = state.on[state.tab], k = c.dataset.k;
+    state.on[state.tab] = on.includes(k) ? on.filter((x) => x !== k) : [...on, k];
+    store.set("filters", state.on); render();
+  });
+  const day = $("#day"), time = $("#time");
+  day.innerHTML = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const name = i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-GB", { weekday: "long" });
+    return `<option value="${i}">${name}, ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</option>`;
+  }).join("");
+  const slots = Array.from({ length: 28 }, (_, i) => `${String(7 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+  const fillTimes = () => {
+    if (state.day !== 0 && state.time === "now") state.time = "08:00";
+    time.innerHTML = (state.day === 0 ? [["now", "Now"]] : []).concat(slots.map((t) => [t, t]))
+      .map(([v, l]) => `<option value="${v}"${v === state.time ? " selected" : ""}>${l}</option>`).join("");
+  };
+  fillTimes();
+  day.addEventListener("change", () => { state.day = +day.value; fillTimes(); render(); });
+  time.addEventListener("change", () => { state.time = time.value; render(); });
+  $("#q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
+  $("#locate").addEventListener("click", () => locate(state.watch == null));
+}
+
+async function main() {
+  bind();
+  try {
+    await Promise.all([loadSpaces(), loadRooms()]);
+  } catch (e) {
+    $("#list").innerHTML = `<p class="empty">Couldn't load data. Please reload.</p>`;
+    console.error(e);
+    return;
+  }
+  render();
+  // Resume "near me" without a prompt if the user already granted it.
+  if (store.get("locate", false)) {
+    const p = await navigator.permissions?.query({ name: "geolocation" }).catch(() => null);
+    if (p?.state === "granted") locate(true);
+  }
+  setInterval(async () => { try { await loadSpaces(); render(); } catch {} }, 60000);
+}
+
+main();

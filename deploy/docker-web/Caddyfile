@@ -1,0 +1,50 @@
+{
+	servers {
+		# keep the visitor's address from the main proxy (for the traffic report)
+		trusted_proxies static private_ranges
+		# read X-Forwarded-For from the right: the left part is whatever the visitor sent
+		trusted_proxies_strict
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	log {
+		output file /logs/access.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+		format json
+	}
+
+	# Traffic report. install.sh writes the login to stats-users.caddy (git-ignored).
+	redir /stats /stats/
+	handle_path /stats/* {
+		basic_auth {
+			import stats-users.caddy
+		}
+		root * /stats
+		header Cache-Control "no-store"
+		file_server
+	}
+
+	handle {
+		root * /srv
+		# everything is small: re-check on every visit so a deploy or new data shows immediately
+		header Cache-Control "no-cache"
+		header {
+			Content-Security-Policy "default-src 'self'; img-src 'self' https://ethz.ch data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			X-Frame-Options SAMEORIGIN
+			Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=()"
+			Strict-Transport-Security "max-age=31536000"
+			-Server
+		}
+		# only the site itself: no hidden files, no temp files from a write in progress
+		@hidden path */.* *.tmp
+		respond @hidden 404
+		file_server
+	}
+}

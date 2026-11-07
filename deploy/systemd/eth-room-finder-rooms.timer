@@ -1,0 +1,10 @@
+[Unit]
+Description=ETH Room Finder: room bookings twice a day
+
+[Timer]
+OnCalendar=*-*-* 05,12:15:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

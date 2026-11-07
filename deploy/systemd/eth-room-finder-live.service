@@ -1,0 +1,18 @@
+[Unit]
+Description=ETH Room Finder: copy live study-space occupancy
+After=network-online.target
+Wants=network-online.target
+OnFailure=eth-room-finder-alert@%n.service
+
+[Service]
+Type=oneshot
+User=roomfinder
+Group=roomfinder
+ExecStart=/opt/eth-room-finder/scripts/fetch_live.sh
+TimeoutStartSec=2min
+# hardening: the job can only write the site's data folder
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/eth-room-finder/site/data

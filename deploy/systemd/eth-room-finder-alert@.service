@@ -1,0 +1,10 @@
+[Unit]
+Description=ETH Room Finder: notify that %i failed
+# at most one notification per job per hour, so an ETH outage doesn't send one every minute
+StartLimitIntervalSec=1h
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/eth-room-finder.env
+ExecStart=/bin/sh -c 'if [ -n "$NTFY_TOPIC" ]; then curl -fsS -m 15 -H "Title: ETH Room Finder: %i failed" -H "Tags: warning" -d "See: journalctl -u %i -n 60" "https://ntfy.sh/$NTFY_TOPIC" >/dev/null; fi; true'
