@@ -39,13 +39,9 @@ _hits_lock = threading.Lock()
 
 
 def _ip() -> str:
-    """The visitor's address as our own Caddy saw it (X-Real-IP, set from the real connection). The left end
-    of X-Forwarded-For is whatever the visitor typed, so it's never trusted."""
-    real = request.headers.get("X-Real-IP", "").strip()
-    if real:
-        return real[:64]
-    xff = [p.strip() for p in request.headers.get("X-Forwarded-For", "").split(",") if p.strip()]
-    return (xff[-1] if xff else request.remote_addr or "")[:64]
+    """The visitor's address, as set by our own Caddy from the real connection (never from X-Forwarded-For,
+    whose left end the visitor can forge)."""
+    return (request.headers.get("X-Real-IP") or request.remote_addr or "").strip()[:64]
 
 
 @app.post("/api/hit")
@@ -129,13 +125,14 @@ def _daily_svg(days) -> str:
             labels.append(
                 f'<text class="lbl" x="{x + bw / 2:.1f}" y="{h - 6}" text-anchor="middle">{d[8:10]}.{d[5:7]}</text>'
             )
-    grid = "".join(
-        f'<line x1="30" x2="{w}" y1="{h - pad - (h - pad - 8) * f:.1f}" y2="{h - pad - (h - pad - 8) * f:.1f}" '
-        f'stroke="currentColor" stroke-opacity=".12"/><text class="lbl" x="24" '
-        f'y="{h - pad - (h - pad - 8) * f + 3:.1f}" text-anchor="end">{round(top * f)}</text>'
-        for f in (0, 0.5, 1)
-    )
-    return f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Visitors per day">{grid}{"".join(bars)}{"".join(labels)}</svg>'
+    grid = []
+    for f in (0, 0.5, 1):
+        y = h - pad - (h - pad - 8) * f
+        grid.append(
+            f'<line x1="30" x2="{w}" y1="{y:.1f}" y2="{y:.1f}" stroke="currentColor" stroke-opacity=".12"/>'
+            f'<text class="lbl" x="24" y="{y + 3:.1f}" text-anchor="end">{round(top * f)}</text>'
+        )
+    return f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Visitors per day">{"".join(grid)}{"".join(bars)}{"".join(labels)}</svg>'
 
 
 if __name__ == "__main__":

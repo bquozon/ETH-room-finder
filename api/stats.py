@@ -9,6 +9,7 @@ Storage: stats.json in STATS_DIR  →  {"days": {"2026-10-09": {"views": 12, "vi
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -94,15 +95,7 @@ class Stats:
                 if vid not in self._seen:
                     self._seen.add(vid)
                     day["visitors"] += 1
-                    self._bump(
-                        day,
-                        "device",
-                        "Phone"
-                        if re.search(r"Mobi|iPhone|Android", ua)
-                        else "Tablet"
-                        if re.search(r"iPad|Tablet", ua)
-                        else "Computer",
-                    )
+                    self._bump(day, "device", _device(ua))
                     self._bump(day, "hour", f"{datetime.now().hour:02d}")
                     self._bump(day, "lang", str(h.get("lang", ""))[:2].lower() or "?")
                     self._bump(day, "ref", _ref(h.get("ref", "")))
@@ -152,24 +145,14 @@ class Stats:
         """Totals for the last `days` days (today included). The trend compares them with the `days` before,
         cut at the same time of day: today isn't over yet, so its counterpart only counts up to this hour."""
         now = now or datetime.now()
-        today = now.date()
+        keys = [(now.date() - timedelta(days=i)).isoformat() for i in range(2 * days)]  # newest first
         live = date.today().isoformat()
-        with self.lock:  # a snapshot; the adding up below doesn't hold up visitors' hits
-            # past days never change again; today's counts do, so today is copied
-            def got(k):
-                return (
-                    {g: dict(v) if isinstance(v, dict) else v for g, v in self.data["days"].get(k, {}).items()}
-                    if k == live
-                    else self.data["days"].get(k, {})
-                )
-
-            def day(d):
-                return got(d.isoformat())
-
-            rng = [(today - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
-            per_day = [(d, got(d)) for d in rng]
-            prev = [day(today - timedelta(days=days + i)) for i in range(days)]  # prev[0] matches today
-            yesterday = day(today - timedelta(days=1))
+        with self.lock:  # a snapshot; only today's counters still change, so only today is copied
+            snap = [self.data["days"].get(k, {}) for k in keys]
+            snap = [copy.deepcopy(d) if k == live else d for k, d in zip(keys, snap)]
+        per_day = list(zip(keys[:days], snap[:days]))[::-1]  # oldest first
+        prev = snap[days:]  # the `days` before; prev[0] is today's counterpart
+        yesterday = snap[1]
         tot = {g: Counter() for g in COUNTERS}
         for _, d in per_day:
             for g in COUNTERS:
@@ -194,12 +177,16 @@ def _so_far(day: dict, now: datetime) -> float:
     return sum(v for h, v in hours.items() if int(h) < now.hour) + hours.get(f"{now.hour:02d}", 0) * now.minute / 60
 
 
+def _device(ua: str) -> str:
+    if re.search(r"Mobi|iPhone|Android", ua):
+        return "Phone"
+    return "Tablet" if re.search(r"iPad|Tablet", ua) else "Computer"
+
+
 def _ref(ref: str) -> str:
     """Where the visitor came from, as a readable name."""
     ref = str(ref or "")
-    if re.match(
-        r"(android|ios)-app:", ref, re.I
-    ):  # opened from inside an app, e.g. android-app://com.reddit.frontpage/
+    if re.match(r"(android|ios)-app:", ref, re.I):  # opened inside an app, e.g. android-app://com.reddit.frontpage/
         app = ref.split("//", 1)[-1].split("/")[0].lower()
         for pat, name in (
             (r"reddit", "Reddit"),
