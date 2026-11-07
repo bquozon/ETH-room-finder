@@ -4,3 +4,4 @@ site/data/
 .claude/
 deploy/docker-web/stats-users.caddy
 deploy/docker-web/.env
+__pycache__/
