@@ -1,0 +1,23 @@
+:root{--bg:#f4f5f7;--card:#fff;--ink:#14171c;--mute:#5d6470;--line:#d9dde3;--accent:#1f407a;--ok:#1b7f45;--no:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1e24;--ink:#eef1f5;--mute:#9aa3ad;--line:#2c323a;--accent:#7ea3e6}}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:20px 16px 60px} h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 16px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px} nav a{padding:7px 12px;border-radius:999px;border:1px solid var(--line);
+color:var(--ink);text-decoration:none;font-weight:600;font-size:14px;background:var(--card)} nav a.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:0 0 14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi b{display:block;font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums} .kpi span{color:var(--mute);font-size:13px}
+.kpi .up{color:var(--ok)} .kpi .down{color:var(--no)}
+.chart{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px 6px;margin:0 0 14px}
+.chart svg{display:block;width:100%;height:auto} .chart .lbl{fill:var(--mute);font-size:10px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.box h3{margin:0 0 8px;font-size:15px} .box p{margin:0;color:var(--mute);font-size:13px}
+.li{position:relative;display:flex;justify-content:space-between;gap:10px;padding:5px 8px;font-size:14px;border-radius:6px;overflow:hidden}
+.li i{position:absolute;inset:0 auto 0 0;background:var(--accent);opacity:.14;border-radius:6px}
+.li span{position:relative;overflow-wrap:anywhere} .li b{position:relative;font-variant-numeric:tabular-nums}
+.hours{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;align-items:end;height:70px}
+.hours div{background:var(--accent);opacity:.75;border-radius:2px 2px 0 0;min-height:1px}
+.hx{display:grid;grid-template-columns:repeat(24,1fr);font-size:10px;color:var(--mute);text-align:center;margin-top:3px}
+.fine{color:var(--mute);font-size:13px;margin:18px 0 0}

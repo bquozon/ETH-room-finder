@@ -1,6 +1,6 @@
 {
 	servers {
-		# keep the visitor's address from the main proxy (for the traffic report)
+		# keep the visitor's address from the main proxy (to count each visitor once a day)
 		trusted_proxies static private_ranges
 		# read X-Forwarded-For from the right: the left part is whatever the visitor sent
 		trusted_proxies_strict
@@ -10,23 +10,24 @@
 :80 {
 	encode zstd gzip
 
-	log {
-		output file /logs/access.log {
-			roll_size 50MiB
-			roll_keep 10
+	# Visit statistics (api/): hits from the page, and the stats page behind a password.
+	# install.sh writes the login to stats-users.caddy (git-ignored).
+	handle /api/hit {
+		reverse_proxy eth-room-finder-api:8790 {
+			header_up X-Real-IP {client_ip}
 		}
-		format json
 	}
-
-	# Traffic report. install.sh writes the login to stats-users.caddy (git-ignored).
-	redir /stats /stats/
-	handle_path /stats/* {
+	@oldstats path /stats /stats/
+	redir @oldstats /api/stats
+	handle /api/stats* {
 		basic_auth {
 			import stats-users.caddy
 		}
-		root * /stats
 		header Cache-Control "no-store"
-		file_server
+		reverse_proxy eth-room-finder-api:8790
+	}
+	handle /api/* {
+		respond 404
 	}
 
 	handle {

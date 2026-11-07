@@ -20,10 +20,11 @@ Visitors only ever load these copies, so ETH sees the same handful of requests w
 ```
 site/                 index.html, app.js (UI), logic.js (pure helpers + building coordinates), style.css
 site/data/            generated JSON (git-ignored)
-scripts/              fetch_live.sh, scrape_rooms.py, extra_rooms.txt, build_stats.sh, update.sh, test_logic.mjs
+api/                  visit statistics: stats.py (counting), server.py (/api/hit, /api/stats), Dockerfile
+scripts/              fetch_live.sh, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py
 deploy/install.sh     installs or updates everything on the VPS (safe to re-run)
-deploy/systemd/       timers: live data, room bookings, traffic report, failure alert
-deploy/docker-web/    the site's Caddy container and the log converter for the traffic report
+deploy/systemd/       timers: live data, room bookings; failure alert
+deploy/docker-web/    compose.yml and Caddyfile for the site and stats containers
 ```
 
 ## Run locally
@@ -33,7 +34,8 @@ Needs Python 3, curl and (for the tests) Node.
 ```bash
 ./scripts/fetch_live.sh && python3 scripts/scrape_rooms.py
 python3 -m http.server 8765 -d site      # open http://localhost:8765
-npm test
+npm test                                 # site logic (Node)
+python3 scripts/test_stats.py            # visit counting
 ```
 
 ## Deploy
@@ -84,7 +86,7 @@ cd /opt/eth-room-finder && git checkout <commit> && sudo bash deploy/install.sh
 To remove the site entirely:
 
 ```bash
-sudo systemctl disable --now eth-room-finder-live.timer eth-room-finder-rooms.timer eth-room-finder-stats.timer
+sudo systemctl disable --now eth-room-finder-live.timer eth-room-finder-rooms.timer
 cd /opt/eth-room-finder/deploy/docker-web && docker compose down
 ```
 
@@ -98,14 +100,14 @@ Then delete the site's block from the front Caddyfile (with `nano`, not `sed -i`
 - HTTPS or 502 errors: `docker logs solidtime-caddy-1 --tail 50`
 - Stats password: `sudo grep STATS_PASSWORD /etc/eth-room-finder.env`. To change it, edit it there, delete `deploy/docker-web/stats-users.caddy` and re-run the installer.
 
-## Traffic
+## Stats
 
-The container writes a JSON access log to `/var/log/eth-room-finder/` (rotated at 50 MB, 10 files kept). Every 10 minutes, `scripts/build_stats.sh` (timer `eth-room-finder-stats`) converts it with `deploy/docker-web/caddy2combined.jq` and GoAccess builds a report at `https://<subdomain>/stats/` (log in as `admin`). It shows visitors per day, pages, devices, browsers, countries and referrers.
+The same anonymous statistics as Poly+Uni Agenda (`api/stats.py` is ported from it). Open `https://<subdomain>/stats` and log in as `admin`.
 
-- IPs are anonymized in the report, and bots are ignored.
-- The once-a-minute `/data/` refreshes from open tabs are left out, so page views aren't inflated.
-- No cookies or tracking scripts are added to the site.
-- The raw log does contain full IPs, so keep it private.
+- **What it shows:** visitors and page views per day, where visitors come from, searches, filters, most opened places and buildings, Near me use, devices, time of day, language, and new vs returning visitors.
+- **How it counts:** the page sends small "hits" to `/api/hit`. Bots don't run the page's JavaScript, so they're never counted.
+- **What it stores:** only daily totals in `/var/lib/eth-room-finder-stats/stats.json`. No cookies and no IP addresses. A visitor is recognised for one day through a hash with a salt that is thrown away at midnight.
+- **Leaving out your own devices:** open `https://<subdomain>/?notrack=1` once on each device, and `?notrack=0` to count it again.
 
 ## Maintaining the data
 

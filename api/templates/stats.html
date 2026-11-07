@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Stats · ETH Room Finder</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>{{ CSS|safe }}</style>
+</head>
+<body>
+<main>
+{# a ranked list with a bar behind each line: rows = [(name, count), …], biggest first #}
+{% macro ranking(rows, limit=12, empty="Nothing yet.") %}
+  {% for name, count in rows[:limit] %}
+    <div class="li"><i style="width:{{ [2, (100 * count / (rows[0][1] or 1))|round|int]|max }}%"></i><span>{{ name }}</span><b>{{ count|thousands }}</b></div>
+  {% else %}
+    <p>{{ empty }}</p>
+  {% endfor %}
+{% endmacro %}
+
+{% macro box(title, note="") %}
+  <div class="box">
+    <h3>{{ title }}</h3>
+    {% if note %}<p>{{ note }}</p>{% endif %}
+    {{ caller() }}
+  </div>
+{% endmacro %}
+
+{# "+12% vs yesterday": change = (percent, compared with what), or nothing when there is nothing to compare with #}
+{% macro trend(change) %}
+  {% if change %}<span class="{{ 'up' if change[0] >= 0 else 'down' }}">{{ '+' if change[0] >= 0 }}{{ change[0] }}% vs {{ change[1] }}{{ '' if day else ' at this time' }}</span>{% endif %}
+{% endmacro %}
+
+<h1>Visitors{% if day %} on {{ day.strftime("%A %d %B %Y") }}{% endif %}</h1>
+<p class="sub">ETH Room Finder · anonymous daily totals: no cookies, no IP addresses stored. Bots are left out.</p>
+<nav>
+  {% for n, label in ((1, "Today"), (7, "7 days"), (30, "30 days"), (90, "90 days"), (365, "1 year")) %}
+    <a href="stats?days={{ n }}" class="{{ 'on' if n == days and not day }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<div class="kpis">
+  <div class="kpi"><b>{{ s.visitors|thousands }}</b><span>visitors</span><br>{{ trend(visitors_change) }}</div>
+  <div class="kpi"><b>{{ s.views|thousands }}</b><span>page views</span></div>
+  {% if not day %}
+    <div class="kpi"><b>{{ s.today|thousands }}</b><span>visitors today</span><br>{{ trend(today_change) }}</div>
+  {% endif %}
+  <div class="kpi"><b>{{ near_me|thousands }}</b><span>used Near me</span></div>
+  <div class="kpi"><b>{{ opened|thousands }}</b><span>directions / floor plans opened</span></div>
+</div>
+
+<div class="chart">
+  {% if day %}
+    <p class="sub" style="margin:4px 0 10px"><a href="stats?days=30" style="color:var(--ink);font-weight:600">← Back to the last 30 days</a></p>
+  {% elif days > 1 %}
+    {{ chart }}
+  {% else %}
+    <p class="sub" style="margin:4px 0 10px">Pick a longer range for the daily chart. Click a day on it to see that day.</p>
+  {% endif %}
+</div>
+
+<div class="cols">
+  {% call box("Where visitors come from", "First visit of the day. Add ?ref=instagram to links you post to see them here as campaigns.") %}{{ ranking(s.ref) }}{% endcall %}
+  {% call box("What people search") %}{{ ranking(s.search, 15, "No searches yet.") }}{% endcall %}
+  {% call box("Most opened places", "Directions or floor plan opened.") %}{{ ranking(s.click, 15, "None yet.") }}{% endcall %}
+  {% call box("Most opened buildings") %}{{ ranking(s.building) }}{% endcall %}
+  {% call box("Filters used") %}{{ ranking(s["filter"], 15) }}{% endcall %}
+  {% call box("Actions") %}{{ ranking(s.action) }}{% endcall %}
+  {% call box("Campaigns (?ref=…)") %}{{ ranking(s.campaign, 10, "None yet. Share links like …/?ref=insta-story.") }}{% endcall %}
+  {% call box("Devices") %}{{ ranking(s.device, 5) }}{% endcall %}
+  {% call box("Time of day (first visit)") %}
+    <div class="hours">
+      {% for hour, count, height in hours %}
+        <div style="height:{{ height }}%" title="{{ hour }}:00 · {{ count }}"></div>
+      {% endfor %}
+    </div>
+    <div class="hx">
+      {% for h in range(24) %}<span>{{ h if h in (0, 6, 12, 18, 23) }}</span>{% endfor %}
+    </div>
+  {% endcall %}
+  {% call box("Browser language") %}{{ ranking(s.lang, 8) }}{% endcall %}
+  {% call box("New or returning", "First visit of the day: when this browser was last on the site.") %}{{ ranking(s["return"], 3, "No data yet.") }}{% endcall %}
+</div>
+
+<p class="fine">Your own visits count too. To leave out this device, open {% if SITE_URL %}<a href="{{ SITE_URL }}/?notrack=1">{{ SITE_URL }}/?notrack=1</a>{% else %}the site with ?notrack=1{% endif %} once.</p>
+</main>
+</body>
+</html>

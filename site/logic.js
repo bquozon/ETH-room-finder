@@ -27,7 +27,7 @@ export function distance([lat1, lon1], [lat2, lon2]) {
 }
 
 // Paths are ~1.3x the straight line; walking ~80 m/min.
-export const walkMinutes = (m) => Math.max(1, Math.round((m * 1.3) / 80));
+const walkMinutes = (m) => Math.max(1, Math.round((m * 1.3) / 80));
 
 export function formatDistance(m) {
   if (m == null) return "";
@@ -70,7 +70,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS_RE = /^(Meal time:\s*)?([A-Z][a-z]{2})(?:\s*-\s*([A-Z][a-z]{2}))?:\s*(?:Closed|(\d{1,2})\.(\d{2})\s*-\s*(\d{1,2})\.(\d{2}))$/;
 const fmtMin = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
-// Returns {open: true|false|null (unknown), today: "08:00–17:00"|"Closed"|null, meal: [from,to] mins|null, mealNow}.
+// Returns {open: true|false|null (unknown), today: "08:00–17:00"|"Closed"|null, mealNow, mealText: "11:00–14:00"|null}.
 export function openingStatus(hours, has24h, at = new Date()) {
   const day = at.getDay(), now = at.getHours() * 60 + at.getMinutes();
   let today, meal = null;
@@ -86,7 +86,7 @@ export function openingStatus(hours, has24h, at = new Date()) {
   const mealNow = within(meal); // cafeteria spaces are only for studying outside meal times
   const open = mealNow ? false : has24h ? true : today === undefined ? null : within(today);
   return {
-    open, mealNow, meal,
+    open, mealNow,
     today: Array.isArray(today) ? `${fmtMin(today[0])}–${fmtMin(today[1])}` : today === "closed" ? "Closed" : null,
     mealText: meal && `${fmtMin(meal[0])}–${fmtMin(meal[1])}`,
   };

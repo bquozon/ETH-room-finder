@@ -35,8 +35,11 @@ def main():
         and r["typecode"] in ("3430", "3420")  # lecture halls, seminar rooms
     ]
     known = {(r["building"], r["floor"], r["room"]) for r in rooms}
-    extra = [l.split(None, 2) for l in EXTRA.read_text().splitlines() if l.strip() and not l.startswith("#")] if EXTRA.exists() else []
-    rooms += [{"building": b, "floor": f, "room": n, "extra": True} for b, f, n in extra if (b, f, n) not in known]
+    for line in EXTRA.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            b, f, n = line.split(None, 2)
+            if (b, f, n) not in known:
+                rooms.append({"building": b, "floor": f, "room": n, "extra": True})
     out = []
     for r in rooms:
         b, f, n = r["building"], r["floor"], r["room"]

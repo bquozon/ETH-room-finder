@@ -1,5 +1,5 @@
-# The site (static files), attached to the network of the Caddy container that holds ports 80/443.
-# deploy/install.sh writes .env (network, folders) and starts it.
+# The site (static files) and the stats API, attached to the network of the Caddy container that holds ports 80/443.
+# deploy/install.sh writes .env (network, folders, user) and starts them.
 # Explicit name: Poly+Uni Agenda's compose folder is also called docker-web, and without this both would be the
 # same compose project, so --remove-orphans here would delete the zrh-events containers.
 name: eth-room-finder
@@ -9,10 +9,24 @@ services:
     container_name: eth-room-finder-web
     restart: unless-stopped
     volumes:
-      - ./:/etc/caddy:ro                          # whole folder: Caddyfile + stats-users.caddy, updates seen on reload
-      - ${SITE_DIR}:/srv:ro                       # the timers keep site/data fresh
-      - /var/lib/eth-room-finder-stats:/stats:ro  # GoAccess report
-      - /var/log/eth-room-finder:/logs            # access log for the report
+      - ./:/etc/caddy:ro          # whole folder: Caddyfile + stats-users.caddy, updates seen on reload
+      - ${SITE_DIR}:/srv:ro       # the timers keep site/data fresh
+    networks: [proxy]
+
+  # Anonymous visit statistics (api/), reached through eth-room-finder-web at /api/
+  eth-room-finder-api:
+    build: ${APP_DIR}/api
+    image: eth-room-finder-api
+    container_name: eth-room-finder-api
+    restart: unless-stopped
+    user: "${RF_UID}:${RF_GID}"
+    command: ["python", "-m", "api.server"]
+    volumes:
+      - /var/lib/eth-room-finder-stats:/data   # stats.json: daily totals only
+    environment:
+      - STATS_DIR=/data
+      - SITE_URL=https://${DOMAIN}
+      - PYTHONUNBUFFERED=1
     networks: [proxy]
 
 networks:

@@ -5,7 +5,7 @@
 #   sudo bash /opt/eth-room-finder/deploy/install.sh rooms.example.ch    # first time: the site's address
 #   /opt/eth-room-finder/scripts/update.sh                               # later: git pull + re-run this
 #
-# The site is served from a Caddy container (deploy/docker-web/) behind the Caddy container that already
+# The site and its stats API are Docker containers (deploy/docker-web/) behind the Caddy container that already
 # holds ports 80/443 on this machine (solidtime's): this adds one site block to that Caddy's Caddyfile.
 # The data jobs run as systemd timers under the 'roomfinder' user.
 #
@@ -26,12 +26,13 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 say "System packages"
 apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 curl jq goaccess >/dev/null
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 curl >/dev/null
 
 say "Service user '$SVC_USER'"
 id -u "$SVC_USER" >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$SVC_USER"
-mkdir -p "$APP/site/data" /var/lib/eth-room-finder-stats /var/log/eth-room-finder
-chown -R "$SVC_USER:$SVC_USER" "$APP/site/data"   # the only folder the jobs may write
+STATS_DIR=/var/lib/eth-room-finder-stats
+mkdir -p "$APP/site/data" "$STATS_DIR"
+chown -R "$SVC_USER:$SVC_USER" "$APP/site/data" "$STATS_DIR"   # the only folders it may write
 chmod 755 "$APP" "$APP/site" "$APP/site/data"
 chmod +x "$APP"/scripts/*.sh
 
@@ -49,15 +50,19 @@ fi
 
 say "Quick checks"
 python3 -I -m py_compile "$APP/scripts/scrape_rooms.py"
-if command -v node >/dev/null; then (cd "$APP" && node scripts/test_logic.mjs); fi
+python3 -I "$APP/scripts/test_stats.py" >/dev/null
+if command -v node >/dev/null; then node "$APP/scripts/test_logic.mjs" >/dev/null; fi
 
 say "Scheduled jobs"
 if crontab -u "${SUDO_USER:-root}" -l 2>/dev/null | grep -q 'eth-room-finder/scripts'; then
   echo "  Note: ${SUDO_USER:-root}'s crontab still runs eth-room-finder scripts. Remove those lines (crontab -e); the timers replace them."
 fi
+# left over from the GoAccess version: its timer, report and access log (the log held full IPs)
+systemctl disable --now eth-room-finder-stats.timer >/dev/null 2>&1 || true
+rm -rf /etc/systemd/system/eth-room-finder-stats.* /var/log/eth-room-finder "$STATS_DIR/index.html"
 cp "$APP"/deploy/systemd/eth-room-finder-* /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now eth-room-finder-live.timer eth-room-finder-rooms.timer eth-room-finder-stats.timer >/dev/null
+systemctl enable --now eth-room-finder-live.timer eth-room-finder-rooms.timer >/dev/null
 
 # ------------------------------------------------------------------ web server
 compose() {  # docker compose v2, or the old docker-compose v1
@@ -65,7 +70,7 @@ compose() {  # docker compose v2, or the old docker-compose v1
 }
 
 setup_docker() {
-  say "Site container for $DOMAIN, behind the Docker reverse proxy"
+  say "Site and stats containers for $DOMAIN, behind the Docker reverse proxy"
   local proxy net img cf mnt inside hash
   proxy="${PROXY_CONTAINER:-}"
   [[ -n "$proxy" ]] || proxy=$(docker ps --format '{{.Names}} {{.Ports}}' | awk '/:(80|443)->/ {print $1; exit}' || true)
@@ -84,11 +89,17 @@ setup_docker() {
   fi
 
   cat > "$DIR/.env" <<EOF
+DOMAIN=$DOMAIN
 PROXY_NETWORK=$net
 SITE_DIR=$APP/site
+APP_DIR=$APP
+RF_UID=$(id -u "$SVC_USER")
+RF_GID=$(id -g "$SVC_USER")
 EOF
-  (cd "$DIR" && compose up -d --force-recreate --remove-orphans)
-  echo "  Site container 'eth-room-finder-web' is running on network '$net' (proxy: $proxy)."
+  # rebuild the stats API image, then recreate both containers so they see the new files.
+  # A failed build stops here and leaves the running containers as they were.
+  (cd "$DIR" && compose build && compose up -d --force-recreate --remove-orphans)
+  echo "  Containers eth-room-finder-web and eth-room-finder-api are running on network '$net' (proxy: $proxy)."
 
   img=$(docker inspect -f '{{.Config.Image}}' "$proxy")
   case "$img" in
@@ -151,7 +162,8 @@ systemctl start eth-room-finder-live.service || echo "  Live fetch failed: journ
 
 say "Done"
 [[ -n "$DOMAIN" ]] && echo "  Website:      https://$DOMAIN  (HTTPS certificate is fetched on first visit)"
-[[ -n "$DOMAIN" ]] && echo "  Traffic:      https://$DOMAIN/stats/  user admin, password: sudo grep STATS_PASSWORD $ENV_FILE"
+[[ -n "$DOMAIN" ]] && echo "  Stats:        https://$DOMAIN/stats  user admin, password: sudo grep STATS_PASSWORD $ENV_FILE"
+[[ -n "$DOMAIN" ]] && echo "                open https://$DOMAIN/?notrack=1 once on each of your own devices to leave them out"
 echo "  Jobs:         systemctl list-timers 'eth-room-finder-*'"
 echo "  Logs:         journalctl -u eth-room-finder-rooms -u eth-room-finder-live -n 50"
 if [[ -z "$(get NTFY_TOPIC)" ]]; then echo "  Alerts:       off. Set NTFY_TOPIC in $ENV_FILE to get a phone notification when a job fails."; fi

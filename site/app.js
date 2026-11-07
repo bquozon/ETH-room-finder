@@ -8,6 +8,48 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
+// ---- anonymous visit statistics, the same as Poly+Uni Agenda (no cookies, see api/stats.py).
+// Open the site once with ?notrack=1 to leave a device out (?notrack=0 to count it again).
+const STATS = (() => {
+  let off = location.protocol === "file:" || navigator.webdriver || navigator.doNotTrack === "1";
+  const first = new URLSearchParams(location.search);
+  const campaign = first.get("ref") || first.get("utm_source") || "";
+  try {
+    if (first.get("notrack") === "1") localStorage.setItem("rf.notrack", "1");
+    if (first.get("notrack") === "0") localStorage.removeItem("rf.notrack");
+    if (localStorage.getItem("rf.notrack") === "1") off = true;
+  } catch {}
+  const send = (d) => {
+    if (off) return;
+    try {
+      const body = JSON.stringify(d);
+      if (!(navigator.sendBeacon && navigator.sendBeacon("api/hit", new Blob([body], { type: "text/plain" }))))
+        fetch("api/hit", { method: "POST", body, keepalive: true }).catch(() => {});
+    } catch {}
+  };
+  let lastQ = "", qTimer;
+  return {
+    view() {
+      const ref = document.referrer && !document.referrer.startsWith(location.origin) ? document.referrer : "";
+      // new or returning: only the date of the last visit is kept, on this device; just the bucket is sent
+      let ret = "new";
+      try {
+        const last = localStorage.getItem("rf.last"), today = new Date().toISOString().slice(0, 10);
+        if (last) ret = (new Date(today) - new Date(last)) / 864e5 <= 7 ? "week" : "older";
+        localStorage.setItem("rf.last", today);
+      } catch { ret = ""; }
+      send({ t: "view", ref, lang: navigator.language || "", utm: campaign, ret });
+    },
+    search(q) {
+      clearTimeout(qTimer); q = q.trim().toLowerCase();
+      if (q.length >= 2) qTimer = setTimeout(() => { if (q !== lastQ) { lastQ = q; send({ t: "search", q }); } }, 1800);
+    },
+    filter(name) { send({ t: "filter", on: [name] }); },
+    click(how, title, building) { send({ t: "click", how, title, building }); },
+    act(kind) { send({ t: kind }); },
+  };
+})();
+
 const FILTERS = {
   spaces: [
     ["zentrum", "Zentrum", (s) => s.campus === "Zentrum"],
@@ -47,38 +89,44 @@ function when() {
   return d;
 }
 const isNow = () => state.day === 0 && state.time === "now";
-const whenLabel = () => isNow() ? "now" : `${state.day === 0 ? "today" : state.day === 1 ? "tomorrow" : when().toLocaleDateString("en-GB", { weekday: "short" })} ${hhmm(when())}`;
+function whenLabel() {
+  if (isNow()) return "now";
+  const day = state.day === 0 ? "today" : state.day === 1 ? "tomorrow" : when().toLocaleDateString("en-GB", { weekday: "short" });
+  return `${day} ${hhmm(when())}`;
+}
 
 async function getJSON(path) {
   const r = await fetch(path, { cache: "no-store" });
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
-  return [await r.json(), r.headers.get("last-modified")];
+  return r.json();
 }
 
+// Spaces and rooms share one shape: title, building, campus, coord, seats, link (floor plan).
 async function loadSpaces() {
-  const [[spaces], [avail, modified]] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json")]);
+  const [spaces, avail] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json")]);
   const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
-  let newest = modified ? new Date(modified) : null;
   state.spaces = spaces.data.map(({ attributes: a }) => {
     const l = live.get(a.roomGlobalIdentifier) || {};
     const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
-    if (ok && l.timestamp && (!newest || new Date(l.timestamp) > newest)) newest = new Date(l.timestamp);
+    const features = a.features || [];
     return {
-      id: a.roomGlobalIdentifier, title: a.title, description: a.description, building: a.building,
-      campus: a.campus === "ZH" ? "Hönggerberg" : "Zentrum", coord: BUILDINGS[a.building],
-      seats: a.seats, has24h: !!a.has24HourAccess, hours: a.hours || [], img: a.image && ETH + a.image,
-      link: a.locationPageUrl && ETH + a.locationPageUrl,
-      features: a.features || [], keys: new Set((a.features || []).map((f) => f.key)),
+      title: a.title, description: a.description, building: a.building,
+      campus: campusOf(a.building), coord: BUILDINGS[a.building], seats: a.seats,
+      link: a.locationPageUrl && ETH + a.locationPageUrl, img: a.image && ETH + a.image,
+      has24h: !!a.has24HourAccess, hours: a.hours || [],
+      features, keys: new Set(features.map((f) => f.key)),
       pct: ok ? l.occupancyPercentage : null, occupancy: l.occupancy, max: l.maxPeople, trend: ok ? l.trend : null,
+      updated: ok && l.timestamp ? new Date(l.timestamp) : null,
     };
   });
-  state.updated = newest;
+  const times = state.spaces.map((s) => s.updated).filter(Boolean);
+  state.updated = times.length ? new Date(Math.max(...times)) : null;
 }
 
 async function loadRooms() {
-  const [data] = await getJSON("data/rooms.json");
+  const data = await getJSON("data/rooms.json");
   state.rooms = data.rooms.map((r) => ({
-    ...r, name: `${r.building} ${r.floor} ${r.room}`, campus: campusOf(r.building), coord: BUILDINGS[r.building],
+    ...r, title: `${r.building} ${r.floor} ${r.room}`, campus: campusOf(r.building), coord: BUILDINGS[r.building],
     seats: Number(r.seats) || 0,
     link: `${ETH}/en/utils/location.html?${new URLSearchParams({ building: r.building, floor: r.floor, room: r.room })}`,
   }));
@@ -98,7 +146,7 @@ function visible() {
   const items = list
     .filter((x) => !campus.length || campus.some(([, , f]) => f(x)))
     .filter((x) => rest.every(([, , f]) => f(x)))
-    .filter((x) => !q || [x.title, x.name, x.description, x.building].some((s) => s && s.toLowerCase().includes(q)))
+    .filter((x) => !q || [x.title, x.description, x.building].some((s) => s && s.toLowerCase().includes(q)))
     .map((x) => ({ ...x, dist: state.pos && x.coord ? distance(state.pos, x.coord) : null }));
 
   const byDist = (a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9);
@@ -115,15 +163,25 @@ function visible() {
   return items;
 }
 
-const directions = (c) => `https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${c[0]},${c[1]}`;
+// Distance, then floor plan and walking directions (data-how: counted by the stats).
+function linksRow(x) {
+  const link = (how, href, text) =>
+    `<a href="${esc(href)}" target="_blank" rel="noopener" data-how="${how}" data-title="${esc(x.title)}" data-building="${esc(x.building)}">${text}</a>`;
+  const links = [
+    x.link && link("floorplan", x.link, "Floor plan"),
+    x.coord && link("directions", `https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${x.coord}`, "Directions"),
+  ].filter(Boolean);
+  return `<div class="row"><span class="dist">${formatDistance(x.dist)}</span><span>${links.join(" · ")}</span></div>`;
+}
 
 function hoursLine(s) {
   const o = s.open;
   const badge = o.mealNow ? `<b class="medium">Mensa until ${o.mealText.split("–")[1]}</b>`
     : o.open === true ? `<b class="low">Open now</b>` : o.open === false ? `<b class="high">Closed now</b>` : "";
   const main = s.has24h ? "24/7 with ETH card" : o.today ? `today ${o.today}` : esc(s.hours[0] || "");
-  const extra = [s.has24h && o.today && (o.today === "Closed" ? "card access only today" : `without card today ${o.today}`), o.mealText && !o.mealNow && `mensa ${o.mealText}`].filter(Boolean);
-  return [badge, main, ...extra].filter(Boolean).join(" · ");
+  const withoutCard = s.has24h && o.today && (o.today === "Closed" ? "card access only today" : `without card today ${o.today}`);
+  const mensa = o.mealText && !o.mealNow && `mensa ${o.mealText}`;
+  return [badge, main, withoutCard, mensa].filter(Boolean).join(" · ");
 }
 
 function spaceCard(s) {
@@ -144,9 +202,7 @@ function spaceCard(s) {
     </div>
     <div class="meter ${lvl}" role="img" aria-label="${s.pct == null ? "Occupancy unknown" : `${s.pct}% full`}"><i style="width:${s.pct ?? 0}%"></i></div>
     ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
-    <div class="row"><span class="dist">${formatDistance(s.dist)}</span><span>
-      ${s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">Floor plan</a> · ` : ""}
-      ${s.coord ? `<a href="${directions(s.coord)}" target="_blank" rel="noopener">Directions</a>` : ""}</span></div>
+    ${linksRow(s)}
   </article>`;
 }
 
@@ -160,7 +216,7 @@ function roomCard(r) {
   const nowFrac = (at.getHours() + at.getMinutes() / 60 - 7) / 14;
   return `<article class="card">
     <div>
-      <h2 class="title">${esc(r.name)}</h2>
+      <h2 class="title">${esc(r.title)}</h2>
       <p class="sub">${esc(r.campus)}${r.seats ? ` · ${r.seats} seats` : ""}</p>
     </div>
     <div class="side ${lvl}"><div class="big"><small>${sub}</small>${label}</div></div>
@@ -169,9 +225,7 @@ function roomCard(r) {
       ${nowFrac > 0 && nowFrac < 1 ? `<b style="left:${nowFrac * 100}%"></b>` : ""}
     </div>
     <div class="ticks"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span><span>21</span></div>
-    <div class="row"><span class="dist">${formatDistance(r.dist)}</span><span>
-      <a href="${esc(r.link)}" target="_blank" rel="noopener">Floor plan</a>
-      ${r.coord ? ` · <a href="${directions(r.coord)}" target="_blank" rel="noopener">Directions</a>` : ""}</span></div>
+    ${linksRow(r)}
   </article>`;
 }
 
@@ -207,12 +261,14 @@ function locate(on) {
     (p) => {
       delete btn.dataset.busy;
       state.pos = [p.coords.latitude, p.coords.longitude];
+      if (btn.getAttribute("aria-pressed") !== "true") STATS.act("locate"); // once per switch-on, not per GPS update
       btn.setAttribute("aria-pressed", "true"); store.set("locate", true);
       msg.hidden = true; render();
     },
     (e) => {
       delete btn.dataset.busy;
       locate(false);
+      STATS.act("locate_no");
       msg.textContent = e.code === 1 ? "Location blocked. Allow it in your browser settings to sort by distance." : "Couldn't get your location. Try again.";
       msg.hidden = false;
     },
@@ -223,11 +279,13 @@ function locate(on) {
 function bind() {
   $(".tabs").addEventListener("click", (e) => {
     const t = e.target.closest("[data-tab]"); if (!t) return;
+    if (state.tab !== t.dataset.tab) STATS.act(`tab_${t.dataset.tab}`);
     state.tab = t.dataset.tab; store.set("tab", state.tab); render();
   });
   $("#chips").addEventListener("click", (e) => {
     const c = e.target.closest("[data-k]"); if (!c) return;
     const on = state.on[state.tab], k = c.dataset.k;
+    if (!on.includes(k)) STATS.filter(`${state.tab === "spaces" ? "Study spaces" : "Free rooms"}: ${c.textContent}`);
     state.on[state.tab] = on.includes(k) ? on.filter((x) => x !== k) : [...on, k];
     store.set("filters", state.on); render();
   });
@@ -244,14 +302,19 @@ function bind() {
       .map(([v, l]) => `<option value="${v}"${v === state.time ? " selected" : ""}>${l}</option>`).join("");
   };
   fillTimes();
-  day.addEventListener("change", () => { state.day = +day.value; fillTimes(); render(); });
-  time.addEventListener("change", () => { state.time = time.value; render(); });
-  $("#q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
+  day.addEventListener("change", () => { state.day = +day.value; fillTimes(); render(); STATS.act("day"); });
+  time.addEventListener("change", () => { state.time = time.value; render(); STATS.act("time"); });
+  $("#q").addEventListener("input", (e) => { state.q = e.target.value; render(); STATS.search(state.q); });
+  $("#list").addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-how]");
+    if (a) STATS.click(a.dataset.how, a.dataset.title, a.dataset.building);
+  });
   $("#locate").addEventListener("click", () => locate(state.watch == null));
 }
 
 async function main() {
   bind();
+  STATS.view();
   try {
     await Promise.all([loadSpaces(), loadRooms()]);
   } catch (e) {
