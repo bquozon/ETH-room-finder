@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, hhmm } from "./logic.js";
+import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, shortStay, hhmm } from "./logic.js";
 import { campusStyle, systemPalette, applyPalette, plantTrees, onTiles } from "./map-style.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const VIEWS = { z: { center: [8.5487, 47.3772], zoom: 16.6 }, h: { center: [8.5085, 47.4085], zoom: 16.4 } };
@@ -123,8 +123,9 @@ function roomsPin(xs) {
   const label = (st) => st.closed ? ["Closed", "unknown"] : st.free ? [st.next ? `unbooked until ${hhmm(st.next)}` : "unbooked", "unbooked"]
     : st.nextFree ? [`booked until ${hhmm(st.nextFree)}`, "high"] : ["booked all day", "high"];
   const rows = [...xs].sort((a, b) => b.status.free - a.status.free).map((r) => {
-    const [text, lvl] = label(r.status);
-    return `<li><span>${esc(`${r.building} ${r.floor} ${r.room}`)}<small>${Number(r.seats) ? `${r.seats} seats` : ""}</small></span><b class="${lvl}">${text}</b></li>`;
+    const [text, lvl] = label(r.status), left = shortStay(r.status, new Date());
+    const warn = left == null ? "" : `<small class="warn">⚠ only ${left} min left</small>`;
+    return `<li><span>${esc(`${r.building} ${r.floor} ${r.room}`)}<small>${Number(r.seats) ? `${r.seats} seats` : ""}</small>${warn}</span><b class="${lvl}">${text}</b></li>`;
   });
   return [closed ? "unknown" : free ? "unbooked" : "high", closed ? "" : ` · ${free} unbooked`, free, rows];
 }

@@ -1,6 +1,6 @@
 // node scripts/test_logic.mjs
 import assert from "node:assert/strict";
-import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay } from "../site/logic.js";
+import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule } from "../site/logic.js";
 
 // HG -> CAB is ~220 m
 const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
@@ -31,6 +31,15 @@ assert.equal(shortStay(roomStatus(busy, at(10, 5)), at(10, 5), 15), -5);
 assert.equal(shortStay(roomStatus(busy, at(9)), at(9)), null);
 assert.equal(shortStay(roomStatus(busy, at(11)), at(11)), null); // booked now: nothing to warn about
 assert.equal(roomStatus([["2026-11-09T00:00:00", "2026-11-09T23:59:00"]], at(12)).nextFree, null);
+
+// Day schedule: gaps and bookings from 07 to 21, back-to-back bookings merged.
+const hm = (d) => d.toTimeString().slice(0, 5);
+assert.deepEqual(daySchedule(busy, at(9)).map(([a, b, x]) => `${hm(a)}-${hm(b)}${x ? "B" : ""}`),
+  ["07:00-10:15", "10:15-13:00B", "13:00-15:00", "15:00-16:00B", "16:00-21:00"]);
+assert.deepEqual(daySchedule([], at(9)).length, 1);
+assert.equal(daySchedule([...busy, ["2026-11-10T08:00:00", "2026-11-10T09:00:00"]], at(9)).length, 5); // other days ignored
+assert.deepEqual(daySchedule([["2026-11-09T06:00:00", "2026-11-09T08:00:00"], ["2026-11-09T07:30:00", "2026-11-09T09:00:00"]], at(9))
+  .map(([a, b, x]) => `${hm(a)}-${hm(b)}${x ? "B" : ""}`), ["07:00-09:00B", "09:00-21:00"]);
 
 const tl = dayTimeline(busy, at(9));
 assert.equal(tl.length, 3);

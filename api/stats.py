@@ -36,6 +36,7 @@ ACTIONS = {
     "time": "Picked a time",
     "directions": "Opened directions",
     "floorplan": "Opened a floor plan",
+    "schedule": "Opened a room's schedule",
     "home_open": "Opened from home screen",
     "a2hs_no": "Closed the home-screen hint",
     "installed": "Added to home screen",

@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay } from "./logic.js";
+import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -77,6 +77,7 @@ const state = {
   day: 0,          // free rooms: days from today (0-6)
   time: "now",     // free rooms: "now" or "HH:MM"
   spaces: [], rooms: [], updated: null, roomsAt: null,
+  opened: new Set(), // free rooms: titles whose full day schedule is shown
 };
 
 // The moment the free-rooms tab looks at.
@@ -225,9 +226,12 @@ function roomCard(r) {
   const warn = left == null ? ""
     : `<p class="sub warn">⚠ ${until}, ${left <= 0 ? "before you get there" : walk ? `${left} min after you arrive` : `only ${left} min unbooked`}</p>`;
   const nowFrac = (at.getHours() + at.getMinutes() / 60 - 7) / 14;
-  return `<article class="card">
+  const open = state.opened.has(r.title), id = `sched-${r.title.replace(/\W+/g, "-")}`;
+  const sched = open ? `<ol class="sched" id="${id}">${daySchedule(r.busy, at).map(([a, b, booked]) =>
+    `<li class="${booked ? "booked" : "unbooked"}${a <= at && at < b ? " at" : ""}"><span>${hhmm(a)}–${hhmm(b)}</span><span>${booked ? "Booked" : "Unbooked"}${a <= at && at < b ? ` <small>← ${isNow() ? "now" : hhmm(at)}</small>` : ""}</span></li>`).join("")}</ol>` : "";
+  return `<article class="card room" data-room="${esc(r.title)}">
     <div>
-      <h2 class="title">${esc(r.title)}</h2>
+      <h2 class="title"><button type="button" class="expand" aria-expanded="${open}" aria-controls="${id}">${esc(r.title)}</button></h2>
       <p class="sub">${esc(r.campus)}${r.seats ? ` · ${r.seats} seats` : ""}</p>
       ${warn}
     </div>
@@ -237,6 +241,7 @@ function roomCard(r) {
       ${nowFrac > 0 && nowFrac < 1 ? `<b style="left:${nowFrac * 100}%"></b>` : ""}
     </div>
     <div class="ticks"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span><span>21</span></div>
+    ${sched}
     ${linksRow(r)}
   </article>`;
 }
@@ -320,7 +325,13 @@ function bind() {
   $("#q").addEventListener("input", (e) => { state.q = e.target.value; render(); STATS.search(state.q); });
   $("#list").addEventListener("click", (e) => {
     const a = e.target.closest("a[data-how]");
-    if (a) STATS.click(a.dataset.how, a.dataset.title, a.dataset.building);
+    if (a) return STATS.click(a.dataset.how, a.dataset.title, a.dataset.building);
+    // The whole room card opens its day schedule (the title button is the keyboard way in).
+    const card = e.target.closest(".card[data-room]");
+    if (!card || e.target.closest("a") || getSelection().toString()) return;
+    const t = card.dataset.room;
+    if (state.opened.delete(t)) return render();
+    state.opened.add(t); STATS.act("schedule"); render();
   });
   $("#locate").addEventListener("click", () => locate(state.watch == null));
 }

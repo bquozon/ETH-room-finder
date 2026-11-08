@@ -73,6 +73,24 @@ export function dayTimeline(busy, now = new Date()) {
     .map(([a, b]) => [Math.max(0, a), Math.min(1, b)]);
 }
 
+// One day 07–21 as consecutive blocks [from, to, booked], overlapping bookings merged.
+export function daySchedule(busy, day = new Date()) {
+  const at = (h) => { const d = new Date(day); d.setHours(h, 0, 0, 0); return d; };
+  const start = at(DAY_START), end = at(DAY_END), out = [];
+  let t = start;
+  for (const [a, b] of busy.map(([a, b]) => [new Date(a), new Date(b)]).sort((x, y) => x[0] - y[0])) {
+    if (a >= end) break; // later days
+    const from = a < start ? start : a, to = b > end ? end : b;
+    if (to <= t) continue;
+    if (from > t) out.push([t, from, false]);
+    const last = out[out.length - 1];
+    if (last?.[2] && from <= last[1]) last[1] = to; else out.push([from > t ? from : t, to, true]);
+    t = to;
+  }
+  if (t < end) out.push([t, end, false]);
+  return out;
+}
+
 // ETH's own `isOpen` flag is unreliable, so read the published hours instead.
 // Lines look like "Mon - Fri: 06.00 - 22.00", "Sat: Closed", "Meal time: Mon - Fri: 11.00 - 14.00".
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
