@@ -22,8 +22,8 @@
   #map { position: fixed; inset: 0; }
   /* floating controls over the map, thumb-sized */
   .float { position: fixed; z-index: 2; display: flex; gap: 6px; }
-  .float.top { top: max(10px, env(safe-area-inset-top)); left: 10px; right: 60px; flex-wrap: wrap; }
-  .float.bottom { bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); }
+  .float.up { top: max(10px, env(safe-area-inset-top)); left: 10px; right: 60px; } /* right: room for the zoom buttons */
+  .float.bottom { bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); white-space: nowrap; }
   .float button, .float a {
     display: inline-flex; align-items: center; text-decoration: none; font-size: 15px;
     min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
@@ -31,7 +31,12 @@
   }
   .float a { color: var(--accent); }
   .float button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-  [data-mode="rooms"] { margin-right: 10px; } /* gap between the "what" pair and the style pair */
+  .float .back { width: 40px; padding: 0; justify-content: center; flex-shrink: 0; }
+  .back svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  /* one pill holding both choices, so they read as "pick one" */
+  .seg { display: flex; padding: 3px; border-radius: 999px; background: var(--card); box-shadow: 0 2px 10px rgb(0 0 0 / .2); }
+  .float .seg button { min-height: 34px; padding: 0 13px; box-shadow: none; white-space: nowrap; }
+  .float .seg button:not([aria-pressed="true"]) { background: transparent; }
   .maplibregl-ctrl-group button { width: 40px; height: 40px; }        /* bigger zoom/compass/locate buttons */
   .maplibregl-ctrl-top-right { top: max(0px, env(safe-area-inset-top)); }
 
@@ -61,10 +66,11 @@
 <body>
   <div id="map" role="region" aria-label="Map of the ETH buildings"></div>
   <p class="maperr" id="maperr" hidden></p>
-  <div class="float top" id="styles"></div>
+  <div class="float up" id="styles"></div>
   <div class="float bottom" id="campus">
     <button data-go="z">Zentrum</button>
     <button data-go="h">Hönggerberg</button>
+    <button id="tilt" aria-pressed="true">3D</button>
   </div>
 </body>
 </html>

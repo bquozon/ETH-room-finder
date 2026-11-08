@@ -167,18 +167,17 @@ function showPins() {
 function setStyle(name) {
   current = name;
   map.easeTo({ pitch: STYLES[name], bearing: STYLES[name] ? -25 : 0 });
-  for (const c of document.querySelectorAll("[data-style]")) c.setAttribute("aria-pressed", c.dataset.style === name);
+  document.getElementById("tilt").setAttribute("aria-pressed", name === "3D");
 }
 // light or dark map, following the phone/computer setting, switched live
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyPalette(map, systemPalette()));
 map.on("move", queueDeclutter);
 
 const bar = document.getElementById("styles");
-bar.innerHTML = `<a href="./">List</a><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button>` +
-  Object.keys(STYLES).map((n) => `<button data-style="${n}" aria-pressed="${n === current}">${n}</button>`).join("");
+bar.innerHTML = `<a href="./" class="back" aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
+  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button></div>`;
 bar.addEventListener("click", (e) => {
-  const c = e.target.closest("[data-style], [data-mode]"); if (!c) return;
-  if (c.dataset.style) return setStyle(c.dataset.style);
+  const c = e.target.closest("[data-mode]"); if (!c) return;
   mode = c.dataset.mode; showPins();
   history.replaceState(null, "", `#${mode}`);
   try { localStorage.setItem("tab", JSON.stringify(mode)); } catch {}
@@ -186,6 +185,7 @@ bar.addEventListener("click", (e) => {
 showPins();
 
 document.getElementById("campus").addEventListener("click", (e) => {
+  if (e.target.closest("#tilt")) return setStyle(current === "3D" ? "Flat" : "3D");
   const c = e.target.closest("[data-go]"); if (c) map.flyTo({ ...VIEWS[c.dataset.go], pitch: STYLES[current], bearing: STYLES[current] ? -25 : 0 });
 });
 
