@@ -39,6 +39,14 @@
   .float .seg button:not([aria-pressed="true"]) { background: transparent; }
   .maplibregl-ctrl-group button { width: 40px; height: 40px; }        /* bigger zoom/compass/locate buttons */
   .maplibregl-ctrl-top-right { top: max(0px, env(safe-area-inset-top)); }
+  /* MapLibre's own buttons are white with dark icons: in dark mode, the card colour and light icons
+     (invert flips the icons, hue-rotate keeps the blue "located" dot blue) */
+  @media (prefers-color-scheme: dark) {
+    .maplibregl-ctrl-group, .maplibregl-ctrl-attrib { background-color: var(--card) !important; }
+    .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
+    .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: invert(1) hue-rotate(180deg); }
+    .maplibregl-ctrl-attrib a { color: var(--muted); }
+  }
 
   .pin { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
   .pin span {
