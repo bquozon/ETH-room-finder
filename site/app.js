@@ -63,7 +63,7 @@ const FILTERS = {
   rooms: [
     ["zentrum", "Zentrum", (r) => r.campus === "Zentrum"],
     ["hongg", "Hönggerberg", (r) => r.campus === "Hönggerberg"],
-    ["free", "Unbooked now", (r) => r.status.free],
+    ["free", "Free now", (r) => r.status.free],
     ["big", "50+ seats", (r) => r.seats >= 50],
   ],
 };
@@ -214,21 +214,20 @@ function spaceCard(s) {
 function roomCard(r) {
   const at = when();
   const st = r.status;
-  // "Unbooked" on purpose: no booking says nothing about how many people are in the room.
   const [label, sub, lvl] = st.closed ? ["Closed", "outside 07–21", "unknown"]
-    : st.free ? (st.next ? [hhmm(st.next), "unbooked · next booking", "unbooked"] : ["rest of day", "unbooked", "unbooked"])
-    : st.nextFree ? [hhmm(st.nextFree), "booked until", "high"]
-    : ["rest of day", "booked", "high"];
+    : st.free ? [`until ${hhmm(st.until)}`, isNow() ? "free" : "free then", "low"]
+    : st.nextFree ? [`from ${hhmm(st.nextFree)}`, "busy, free", "high"]
+    : ["Busy", "rest of day", "high"];
   // Nearest-first can put a room on top that gets booked minutes after you walk in: say so before you leave.
   const walk = isNow() && r.dist != null ? walkMinutes(r.dist) : 0;
   const left = shortStay(st, at, walk);
   const until = st.next ? `Booked at ${hhmm(st.next)}` : "Closes at 21:00";
   const warn = left == null ? ""
-    : `<p class="sub warn">⚠ ${until}, ${left <= 0 ? "before you get there" : walk ? `${left} min after you arrive` : `only ${left} min unbooked`}</p>`;
+    : `<p class="sub warn">⚠ ${until}, ${left <= 0 ? "before you get there" : walk ? `${left} min after you arrive` : `only ${left} min free`}</p>`;
   const nowFrac = (at.getHours() + at.getMinutes() / 60 - 7) / 14;
   const open = state.opened.has(r.title), id = `sched-${r.title.replace(/\W+/g, "-")}`;
   const sched = open ? `<ol class="sched" id="${id}">${daySchedule(r.busy, at).map(([a, b, booked]) =>
-    `<li class="${booked ? "booked" : "unbooked"}${a <= at && at < b ? " at" : ""}"><span>${hhmm(a)}–${hhmm(b)}</span><span>${booked ? "Booked" : "Unbooked"}${a <= at && at < b ? ` <small>← ${isNow() ? "now" : hhmm(at)}</small>` : ""}</span></li>`).join("")}</ol>` : "";
+    `<li class="${booked ? "booked" : "free"}${a <= at && at < b ? " at" : ""}"><span>${hhmm(a)}–${hhmm(b)}</span><span>${booked ? "Booked" : "Free"}${a <= at && at < b ? ` <small>← ${isNow() ? "now" : hhmm(at)}</small>` : ""}</span></li>`).join("")}</ol>` : "";
   return `<article class="card room" data-room="${esc(r.title)}">
     <div>
       <h2 class="title"><button type="button" class="expand" aria-expanded="${open}" aria-controls="${id}">${esc(r.title)}</button></h2>
@@ -250,19 +249,20 @@ function render() {
   for (const b of document.querySelectorAll("[role=tab]")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
   $("#list").setAttribute("aria-labelledby", `tab-${state.tab}`);
   $("#chips").innerHTML = FILTERS[state.tab].map(([k, label]) =>
-    `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Unbooked ${isNow() ? "now" : "then"}` : label}</button>`).join("");
+    `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Free ${isNow() ? "now" : "then"}` : label}</button>`).join("");
   $("#when").hidden = state.tab !== "rooms";
   $("#maplink").href = `map.html#${state.tab}`; // the map opens on the same tab
   const items = visible();
   $("#list").innerHTML = items.length
     ? items.map(state.tab === "spaces" ? spaceCard : roomCard).join("")
+      + (state.tab === "rooms" ? `<p class="note">“Free” means no class is booked, not that the room is empty.</p>` : "")
     : `<p class="empty">${state.tab === "rooms" && state.on.rooms.includes("free")
-      ? `No teaching room is unbooked ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Unbooked”.`
+      ? `No teaching room is free ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Free”.`
       : "Nothing matches. Try removing a filter."}</p>`;
   $("#list").setAttribute("aria-busy", "false");
   $("#updated").textContent = state.tab === "spaces"
     ? (state.updated ? `Live occupancy · updated ${hhmm(state.updated)}` : "Live occupancy")
-    : `Bookings, not headcounts${state.roomsAt ? ` · checked ${stamp(state.roomsAt)}` : ""} · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} unbooked ${whenLabel()}`;
+    : `Room bookings${state.roomsAt ? ` · checked ${stamp(state.roomsAt)}` : ""} · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} free ${whenLabel()}`;
 }
 
 function locate(on) {

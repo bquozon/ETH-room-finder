@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>ETH Room Finder · study spaces & lecture rooms</title>
-  <meta name="description" content="ETH Room Finder: find a free study space or an unbooked lecture room at ETH Zurich, nearest first, with live occupancy.">
+  <title>ETH Room Finder · study spaces & free rooms</title>
+  <meta name="description" content="ETH Room Finder: find a free study space or empty lecture room at ETH Zurich, nearest first, with live occupancy.">
   <meta name="application-name" content="ETH Room Finder">
   <link rel="canonical" href="https://eth-rooms.bquozon.ch/">
   <meta property="og:title" content="ETH Room Finder">
-  <meta property="og:description" content="Find a free study space or an unbooked lecture room at ETH Zurich, nearest first, with live occupancy.">
+  <meta property="og:description" content="Find a free study space or empty lecture room at ETH Zurich, nearest first, with live occupancy.">
   <meta property="og:url" content="https://eth-rooms.bquozon.ch/">
   <meta property="og:image" content="https://eth-rooms.bquozon.ch/icon-512.png">
   <meta property="og:type" content="website">
@@ -25,7 +25,7 @@
   <header class="top">
     <div class="brand">
       <h1>ETH Room Finder</h1>
-      <p class="tagline">Study spaces &amp; unbooked rooms at ETH Zurich</p>
+      <p class="tagline">Study spaces &amp; free rooms at ETH Zurich</p>
       <p class="updated" id="updated" aria-live="polite">Loading…</p>
     </div>
     <button class="locate" id="locate" type="button" aria-pressed="false">
@@ -37,7 +37,7 @@
   <div class="tabrow">
     <nav class="tabs" role="tablist" aria-label="Kind of place">
       <button role="tab" id="tab-spaces" aria-selected="true" aria-controls="list" data-tab="spaces">Study spaces</button>
-      <button role="tab" id="tab-rooms" aria-selected="false" aria-controls="list" data-tab="rooms">Lecture rooms</button>
+      <button role="tab" id="tab-rooms" aria-selected="false" aria-controls="list" data-tab="rooms">Free rooms</button>
     </nav>
     <a class="maplink" id="maplink" href="map.html">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14"/></svg>Map
@@ -66,7 +66,7 @@
   </div>
 
   <footer class="foot">
-    Room-booking data builds on <a href="https://github.com/ollie-sara/roominfo_checker">roominfo_checker</a>
+    Free-room data builds on <a href="https://github.com/ollie-sara/roominfo_checker">roominfo_checker</a>
     by Oliver Saravanja (<a href="https://github.com/ollie-sara">@ollie-sara</a>), the original
     <a href="https://rooms.saravanja.ch">Sick Room Finder</a>. Thank you!<br>
     Data: ETH Zurich (study-space occupancy, room bookings). Unofficial, not affiliated with ETH.<br>

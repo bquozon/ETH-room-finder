@@ -55,7 +55,7 @@ export function roomStatus(busy, now = new Date()) {
   return { free: true, until: next ?? dayEnd, next, nextFree: null };
 }
 
-// Minutes an unbooked room stays unbooked once you get there, when under SHORT_STAY; otherwise null.
+// Minutes a free room stays free once you get there, when under SHORT_STAY; otherwise null.
 export const SHORT_STAY = 30;
 export function shortStay(st, at, walk = 0) {
   if (!st.free) return null;

@@ -104,7 +104,7 @@ for (const { attributes: a } of spaces.data) {
 }
 
 
-// ---- unbooked rooms, same rules as the list (roomStatus: unbooked until / booked until, closed outside 07–21)
+// ---- free rooms, same rules as the list (roomStatus: free until / free from, closed outside 07–21)
 const roomsBy = new Map();
 for (const r of roomData.rooms) {
   if (!BUILDINGS[r.building]) continue;
@@ -120,14 +120,14 @@ function spacesPin(xs) {
 }
 function roomsPin(xs) {
   const free = xs.filter((r) => r.status.free).length, closed = xs.every((r) => r.status.closed);
-  const label = (st) => st.closed ? ["Closed", "unknown"] : st.free ? [st.next ? `unbooked until ${hhmm(st.next)}` : "unbooked", "unbooked"]
-    : st.nextFree ? [`booked until ${hhmm(st.nextFree)}`, "high"] : ["booked all day", "high"];
+  const label = (st) => st.closed ? ["Closed", "unknown"] : st.free ? [`free until ${hhmm(st.until)}`, "low"]
+    : st.nextFree ? [`free from ${hhmm(st.nextFree)}`, "high"] : ["busy all day", "high"];
   const rows = [...xs].sort((a, b) => b.status.free - a.status.free).map((r) => {
     const [text, lvl] = label(r.status), left = shortStay(r.status, new Date());
     const warn = left == null ? "" : `<small class="warn">⚠ only ${left} min left</small>`;
     return `<li><span>${esc(`${r.building} ${r.floor} ${r.room}`)}<small>${Number(r.seats) ? `${r.seats} seats` : ""}</small>${warn}</span><b class="${lvl}">${text}</b></li>`;
   });
-  return [closed ? "unknown" : free ? "unbooked" : "high", closed ? "" : ` · ${free} unbooked`, free, rows];
+  return [closed ? "unknown" : free ? "low" : "high", closed ? "" : ` · ${free} free`, free, rows];
 }
 
 // Pins that would overlap on screen: the most useful one keeps its label, the others shrink to a dot.
@@ -177,7 +177,7 @@ map.on("move", queueDeclutter);
 
 const bar = document.getElementById("styles");
 bar.innerHTML = `<a href="./" class="back" aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
-  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Lecture rooms</button></div>`;
+  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button></div>`;
 bar.addEventListener("click", (e) => {
   const c = e.target.closest("[data-mode]"); if (!c) return;
   mode = c.dataset.mode; showPins();
