@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Map · ETH Room Finder</title>
-<meta name="description" content="3D map of ETH Zurich: live occupancy of the study spaces and free lecture rooms, building by building.">
+<meta name="description" content="3D map of ETH Zurich: live occupancy of the study spaces and unbooked lecture rooms, building by building.">
 <link rel="canonical" href="https://eth-rooms.bquozon.ch/map.html">
 <meta name="theme-color" content="#1f407a">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -60,7 +60,7 @@
   .pin em { width: 10px; height: 4px; border-radius: 50%; background: rgb(0 0 0 / .35); }  /* ground shadow */
   .pin.dot span { font-size: 0; padding: 2px; gap: 0; }   /* decluttered: just the coloured dot, still tappable */
   .pin.dot i { height: 10px; }
-  .pin.low { --c: var(--low); } .pin.medium { --c: var(--medium); } .pin.high { --c: var(--high); } .pin.unknown { --c: var(--unknown); }
+  .pin.low { --c: var(--low); } .pin.medium { --c: var(--medium); } .pin.high { --c: var(--high); } .pin.unknown { --c: var(--unknown); } .pin.unbooked { --c: var(--unbooked); }
   .maplibregl-popup-content { background: var(--card); color: var(--text); border-radius: 14px; padding: 12px 14px; font: 14px/1.4 system-ui, sans-serif; }
   .maplibregl-popup-tip { border-top-color: var(--card) !important; }
   .maplibregl-popup-close-button { font-size: 22px; width: 36px; height: 36px; }

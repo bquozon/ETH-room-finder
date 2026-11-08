@@ -3,7 +3,7 @@
 Unofficial ETH Zurich room finder. It shows how full the student study spaces are right now, which lecture and seminar rooms are free (today or any day this week), and sorts everything by walking distance from you.
 
 - **Study spaces**: live occupancy, opening hours (including 24/7 access with an ETH card), sockets, noise level, food nearby.
-- **Free rooms**: "free until 14:15" or "busy, free from 13:00", with a bar of the day's bookings. Pick any day and time in the next week.
+- **Lecture rooms**: "unbooked, next booking 14:15" or "booked until 13:00", with a bar of the day's bookings and a warning when a room gets booked soon after you'd arrive. A room with no booking isn't necessarily empty, so it's shown in its own colour, not the green of free seats. Pick any day and time in the next week.
 - **Map** (`map.html`): a 3D map of the campus with a pin per building (live occupancy or free rooms), ETH buildings in ETH blue, light/dark following the system, and trees that follow the seasons (`?season=winter|spring|summer|autumn` to preview). Map data © OpenStreetMap contributors, tiles from [OpenFreeMap](https://openfreemap.org).
 - **Near me**: uses your browser's location. Distances are computed on your device, and your location never reaches the server.
 

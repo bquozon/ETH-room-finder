@@ -27,7 +27,7 @@ export function distance([lat1, lon1], [lat2, lon2]) {
 }
 
 // Paths are ~1.3x the straight line; walking ~80 m/min.
-const walkMinutes = (m) => Math.max(1, Math.round((m * 1.3) / 80));
+export const walkMinutes = (m) => Math.max(1, Math.round((m * 1.3) / 80));
 
 export function formatDistance(m) {
   if (m == null) return "";
@@ -37,7 +37,8 @@ export function formatDistance(m) {
 
 const DAY_START = 7, DAY_END = 21; // teaching buildings are realistically usable 07–21
 
-// busy: [[isoFrom, isoTo], ...] in local time. Returns {free, until: Date|null, nextFree: Date|null}.
+// busy: [[isoFrom, isoTo], ...] in local time. Returns {free, until: Date|null, next: Date|null, nextFree: Date|null}.
+// free means no booking, not that nobody is in the room. next: start of the next booking today, if any.
 export function roomStatus(busy, now = new Date()) {
   const dayEnd = new Date(now); dayEnd.setHours(DAY_END, 0, 0, 0);
   const h = now.getHours();
@@ -50,8 +51,16 @@ export function roomStatus(busy, now = new Date()) {
     for (const [a, b] of iv) if (a <= end && b > end) end = b;
     return { free: false, until: null, nextFree: end < dayEnd ? end : null };
   }
-  const next = iv.find(([a]) => a > now);
-  return { free: true, until: next && next[0] < dayEnd ? next[0] : dayEnd, nextFree: null };
+  const n = iv.find(([a]) => a > now), next = n && n[0] < dayEnd ? n[0] : null;
+  return { free: true, until: next ?? dayEnd, next, nextFree: null };
+}
+
+// Minutes an unbooked room stays unbooked once you get there, when under SHORT_STAY; otherwise null.
+export const SHORT_STAY = 30;
+export function shortStay(st, at, walk = 0) {
+  if (!st.free) return null;
+  const left = Math.round((st.until - at) / 6e4) - walk;
+  return left < SHORT_STAY ? left : null;
 }
 
 // Today's bookings clipped to 07–21, as [startFraction, endFraction] for a timeline bar.

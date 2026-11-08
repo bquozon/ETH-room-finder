@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus } from "./logic.js";
+import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -63,7 +63,7 @@ const FILTERS = {
   rooms: [
     ["zentrum", "Zentrum", (r) => r.campus === "Zentrum"],
     ["hongg", "Hönggerberg", (r) => r.campus === "Hönggerberg"],
-    ["free", "Free now", (r) => r.status.free],
+    ["free", "Unbooked now", (r) => r.status.free],
     ["big", "50+ seats", (r) => r.seats >= 50],
   ],
 };
@@ -76,7 +76,7 @@ const state = {
   watch: null,
   day: 0,          // free rooms: days from today (0-6)
   time: "now",     // free rooms: "now" or "HH:MM"
-  spaces: [], rooms: [], updated: null,
+  spaces: [], rooms: [], updated: null, roomsAt: null,
 };
 
 // The moment the free-rooms tab looks at.
@@ -94,6 +94,9 @@ function whenLabel() {
   const day = state.day === 0 ? "today" : state.day === 1 ? "tomorrow" : when().toLocaleDateString("en-GB", { weekday: "short" });
   return `${day} ${hhmm(when())}`;
 }
+
+// "17:29", or "Fri 17:29" when it isn't from today, so stale data doesn't pass for fresh.
+const stamp = (d) => d.toDateString() === new Date().toDateString() ? hhmm(d) : `${d.toLocaleDateString("en-GB", { weekday: "short" })} ${hhmm(d)}`;
 
 async function getJSON(path) {
   const r = await fetch(path, { cache: "no-store" });
@@ -125,6 +128,7 @@ async function loadSpaces() {
 
 async function loadRooms() {
   const data = await getJSON("data/rooms.json");
+  state.roomsAt = data.generated ? new Date(data.generated) : null;
   state.rooms = data.rooms.map((r) => ({
     ...r, title: `${r.building} ${r.floor} ${r.room}`, campus: campusOf(r.building), coord: BUILDINGS[r.building],
     seats: Number(r.seats) || 0,
@@ -198,7 +202,7 @@ function spaceCard(s) {
     <div class="side ${lvl}">
       ${s.pct == null
         ? `<div class="big unknown">—<small>no live data</small></div>`
-        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy ?? "?"} / ${s.max ?? "?"} people</small></div>`}
+        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy ?? "?"} / ${s.max ?? "?"} people</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
     </div>
     <div class="meter ${lvl}" role="img" aria-label="${s.pct == null ? "Occupancy unknown" : `${s.pct}% full`}"><i style="width:${s.pct ?? 0}%"></i></div>
     ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
@@ -209,15 +213,23 @@ function spaceCard(s) {
 function roomCard(r) {
   const at = when();
   const st = r.status;
+  // "Unbooked" on purpose: no booking says nothing about how many people are in the room.
   const [label, sub, lvl] = st.closed ? ["Closed", "outside 07–21", "unknown"]
-    : st.free ? [`until ${hhmm(st.until)}`, isNow() ? "free" : "free then", "low"]
-    : st.nextFree ? [`from ${hhmm(st.nextFree)}`, "busy, free", "high"]
-    : ["Busy", "rest of day", "high"];
+    : st.free ? (st.next ? [hhmm(st.next), "unbooked · next booking", "unbooked"] : ["rest of day", "unbooked", "unbooked"])
+    : st.nextFree ? [hhmm(st.nextFree), "booked until", "high"]
+    : ["rest of day", "booked", "high"];
+  // Nearest-first can put a room on top that gets booked minutes after you walk in: say so before you leave.
+  const walk = isNow() && r.dist != null ? walkMinutes(r.dist) : 0;
+  const left = shortStay(st, at, walk);
+  const until = st.next ? `Booked at ${hhmm(st.next)}` : "Closes at 21:00";
+  const warn = left == null ? ""
+    : `<p class="sub warn">⚠ ${until}, ${left <= 0 ? "before you get there" : walk ? `${left} min after you arrive` : `only ${left} min unbooked`}</p>`;
   const nowFrac = (at.getHours() + at.getMinutes() / 60 - 7) / 14;
   return `<article class="card">
     <div>
       <h2 class="title">${esc(r.title)}</h2>
       <p class="sub">${esc(r.campus)}${r.seats ? ` · ${r.seats} seats` : ""}</p>
+      ${warn}
     </div>
     <div class="side ${lvl}"><div class="big"><small>${sub}</small>${label}</div></div>
     <div class="timeline" role="img" aria-label="Bookings that day, 07:00 to 21:00">
@@ -233,19 +245,19 @@ function render() {
   for (const b of document.querySelectorAll("[role=tab]")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
   $("#list").setAttribute("aria-labelledby", `tab-${state.tab}`);
   $("#chips").innerHTML = FILTERS[state.tab].map(([k, label]) =>
-    `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Free ${isNow() ? "now" : "then"}` : label}</button>`).join("");
+    `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Unbooked ${isNow() ? "now" : "then"}` : label}</button>`).join("");
   $("#when").hidden = state.tab !== "rooms";
   $("#maplink").href = `map.html#${state.tab}`; // the map opens on the same tab
   const items = visible();
   $("#list").innerHTML = items.length
     ? items.map(state.tab === "spaces" ? spaceCard : roomCard).join("")
     : `<p class="empty">${state.tab === "rooms" && state.on.rooms.includes("free")
-      ? `No teaching room is free ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Free”.`
+      ? `No teaching room is unbooked ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Unbooked”.`
       : "Nothing matches. Try removing a filter."}</p>`;
   $("#list").setAttribute("aria-busy", "false");
   $("#updated").textContent = state.tab === "spaces"
     ? (state.updated ? `Live occupancy · updated ${hhmm(state.updated)}` : "Live occupancy")
-    : `Room bookings · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} free ${whenLabel()}`;
+    : `Bookings, not headcounts${state.roomsAt ? ` · checked ${stamp(state.roomsAt)}` : ""} · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} unbooked ${whenLabel()}`;
 }
 
 function locate(on) {

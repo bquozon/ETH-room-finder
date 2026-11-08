@@ -1,6 +1,6 @@
 // node scripts/test_logic.mjs
 import assert from "node:assert/strict";
-import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus } from "../site/logic.js";
+import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay } from "../site/logic.js";
 
 // HG -> CAB is ~220 m
 const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
@@ -21,7 +21,15 @@ s = roomStatus(busy, at(11));
 assert.equal(s.free, false); assert.equal(s.nextFree.getHours(), 13);
 s = roomStatus(busy, at(16, 30));
 assert.equal(s.free, true); assert.equal(s.until.getHours(), 21);
+assert.equal(s.next, null); // nothing booked before 21:00
+assert.equal(roomStatus(busy, at(9)).next.getHours(), 10);
 assert.equal(roomStatus(busy, at(22)).closed, true);
+// Short stays: 10:15 booking seen at 10:05 is 10 min; with a 4-min walk, 6 min after arrival; at 9:00, fine.
+assert.equal(shortStay(roomStatus(busy, at(10, 5)), at(10, 5)), 10);
+assert.equal(shortStay(roomStatus(busy, at(10, 5)), at(10, 5), 4), 6);
+assert.equal(shortStay(roomStatus(busy, at(10, 5)), at(10, 5), 15), -5);
+assert.equal(shortStay(roomStatus(busy, at(9)), at(9)), null);
+assert.equal(shortStay(roomStatus(busy, at(11)), at(11)), null); // booked now: nothing to warn about
 assert.equal(roomStatus([["2026-11-09T00:00:00", "2026-11-09T23:59:00"]], at(12)).nextFree, null);
 
 const tl = dayTimeline(busy, at(9));
