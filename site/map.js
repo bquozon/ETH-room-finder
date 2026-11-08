@@ -81,7 +81,8 @@ try {
     attributionControl: { compact: true },
   });
 } catch (e) { fail("Your browser can't show the map (WebGL is off or not supported)."); throw e; }
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));  // compass: tap to face north again
+// compass: tap to face north again. No +/- on touch screens: there you pinch.
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: !matchMedia("(pointer: coarse)").matches }));
 map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }));
 map.once("load", () => { if (current === "3D" && !map.isMoving()) map.easeTo({ pitch: STYLES["3D"], bearing: -25, duration: 1200 }); });
 // before the await below, or the map's first "style.load" could be missed
