@@ -1,6 +1,5 @@
-import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, shortStay, hhmm } from "./logic.js";
-import { campusStyle, systemPalette, applyPalette, plantTrees, onTiles } from "./map-style.js";
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, shortStay, hhmm, esc, getJSON } from "./logic.js";
+import { campusStyle, systemPalette, applyPalette, plantTrees, onTiles, polys, inPoly } from "./map-style.js";
 const VIEWS = { z: { center: [8.5487, 47.3772], zoom: 16.6 }, h: { center: [8.5085, 47.4085], zoom: 16.4 } };
 const STYLES = { "3D": 60, "Flat": 0 }; // name: camera pitch (same map style, so switching is instant)
 let current = "3D";
@@ -9,16 +8,6 @@ let current = "3D";
 // as their own layer on top (recolouring the base layer by id glitched). Tiles only load for what is
 // on screen, so keep collecting as the user pans.
 const PTS = Object.values(BUILDINGS).map(([lat, lon]) => [lon, lat]);
-const inRing = ([x, y], ring) => {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-};
-const polys = (g) => (g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : []);
-const contains = (g, p) => polys(g).some(([outer, ...holes]) => inRing(p, outer) && !holes.some((h) => inRing(p, h)));
 // A tile feature can bundle many buildings (MultiPolygon). So: take every feature that holds an ETH
 // point out of the base layer (by id) and redraw it in our own layer, ETH polygons teal, the rest grey.
 // Drawing a copy on top instead made the walls flicker (two identical shapes fighting).
@@ -26,12 +15,12 @@ const contains = (g, p) => polys(g).some(([outer, ...holes]) => inRing(p, outer)
 // OSM often has a building twice: its outline (hide_3d, not extruded) and its parts (extruded, with
 // heights). A polygon is ETH if it holds one of our points, or if it is a part lying inside such an outline.
 const ethIds = new Set(), pieces = new Map(), outlines = new Map();
-const holdsPoint = (poly) => PTS.some((p) => contains({ type: "Polygon", coordinates: poly }, p));
+const holdsPoint = (poly) => PTS.some((p) => inPoly(poly, p));
 const middle = ([ring]) => ring.reduce(([x, y], [a, b]) => [x + a / ring.length, y + b / ring.length], [0, 0]);
-const isEth = (poly) => holdsPoint(poly) || [...outlines.values()].some((o) => contains({ type: "Polygon", coordinates: o }, middle(poly)));
+const isEth = (poly) => holdsPoint(poly) || [...outlines.values()].some((o) => inPoly(o, middle(poly)));
 function collectEth() {
   const fs = map.querySourceFeatures("openmaptiles", { sourceLayer: "building" });
-  const ids = ethIds.size, n = pieces.size;
+  const n = pieces.size;
   for (const f of fs) for (const poly of polys(f.geometry)) if (holdsPoint(poly)) outlines.set(JSON.stringify(poly[0][0]), poly);
   for (const f of fs) if (f.id != null && !ethIds.has(f.id) && polys(f.geometry).some(isEth)) ethIds.add(f.id);
   for (const f of fs) if (ethIds.has(f.id)) for (const poly of polys(f.geometry)) {
@@ -42,7 +31,6 @@ function collectEth() {
     for (const p of pieces.values()) p.properties.eth = isEth(p.geometry.coordinates); // outlines may have arrived after the parts
     map.getSource("eth")?.setData({ type: "FeatureCollection", features: [...pieces.values()] });
   }
-  if (ethIds.size !== ids) hideInBase();
 }
 let baseFilter;
 function hideInBase() {
@@ -66,7 +54,6 @@ const fail = (text) => {
   const e = document.getElementById("maperr");
   e.innerHTML = `${text}<br><a href="./">Back to the list</a>`; e.hidden = false;
 };
-const getJSON = (p) => fetch(p, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); });
 // shortcut: loaded once, unlike the list (every minute); add a refresh if people keep the map open long
 const loading = Promise.all(["data/spaces.json", "data/availability.json", "data/rooms.json"].map(getJSON));
 
@@ -88,6 +75,10 @@ map.once("load", () => { if (current === "3D" && !map.isMoving()) map.easeTo({ p
 // before the await below, or the map's first "style.load" could be missed
 map.on("style.load", () => { addEthLayers(); plantTrees(map); });
 onTiles(map, collectEth);
+// Swap only once our copies are drawn (hiding first left a gap, then blue), and show the buildings then.
+const showBuildings = () => map.getLayer("building-3d") && map.setPaintProperty("building-3d", "fill-extrusion-opacity", 1);
+map.on("sourcedata", (e) => { if (e.sourceId === "eth" && e.isSourceLoaded && pieces.size) { hideInBase(); showBuildings(); } });
+setTimeout(showBuildings, 3000); // no ETH building in sight: show the rest anyway
 
 let spaces, avail, roomData;
 try {
@@ -102,7 +93,6 @@ for (const { attributes: a } of spaces.data) {
   const open = openingStatus(a.hours || [], a.has24HourAccess).open;
   (byBuilding.get(a.building) ?? byBuilding.set(a.building, []).get(a.building)).push({ ...a, pct, open });
 }
-
 
 // ---- free rooms, same rules as the list (roomStatus: free until / free from, closed outside 07–21)
 const roomsBy = new Map();

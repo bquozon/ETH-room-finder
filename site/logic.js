@@ -1,5 +1,8 @@
 // Pure helpers, no DOM. Tested by scripts/test_logic.mjs.
 
+export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+export const getJSON = (p) => fetch(p, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); });
+
 // Building centroids, taken from the Google Maps links on ethz.ch/en/utils/location.html.
 export const BUILDINGS = {
   CAB: [47.37837, 8.548801], CHN: [47.379377, 8.548462], CLA: [47.377575, 8.546827],
@@ -56,7 +59,7 @@ export function roomStatus(busy, now = new Date()) {
 }
 
 // Minutes a free room stays free once you get there, when under SHORT_STAY; otherwise null.
-export const SHORT_STAY = 30;
+const SHORT_STAY = 30;
 export function shortStay(st, at, walk = 0) {
   if (!st.free) return null;
   const left = Math.round((st.until - at) / 6e4) - walk;

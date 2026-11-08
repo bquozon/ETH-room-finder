@@ -1,8 +1,7 @@
-import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule } from "./logic.js";
+import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const store = {
   get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -98,12 +97,6 @@ function whenLabel() {
 
 // "17:29", or "Fri 17:29" when it isn't from today, so stale data doesn't pass for fresh.
 const stamp = (d) => d.toDateString() === new Date().toDateString() ? hhmm(d) : `${d.toLocaleDateString("en-GB", { weekday: "short" })} ${hhmm(d)}`;
-
-async function getJSON(path) {
-  const r = await fetch(path, { cache: "no-store" });
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
-  return r.json();
-}
 
 // Spaces and rooms share one shape: title, building, campus, coord, seats, link (floor plan).
 async function loadSpaces() {

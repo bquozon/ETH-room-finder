@@ -6,7 +6,7 @@
 // yellow/orange/red: autumn leaves, bare: winter branches, pink/rose: spring blossom, each [from, to] (each tree
 // gets its own shade in between), kept soft to suit the pale map;
 // autumn/winter/spring: keys that replace the normal (summer) ones in that season.
-export const PALETTES = {
+const PALETTES = {
   // light buildings: a pale tint of the complement of the ETH blue (hue 38° vs 218°), so the blue stands out
   light: { ground: "#f6f7f8", campus: "#e9f2f3", grass: "#cbe6b8", wood: "#b8d9a8", water: "#b3d9f2", road: "#ffffff",
     roadEdge: "#dfe3e8", rail: "#c8cdd4", building: "#faf6ef", eth: "#1f407a", label: "#6b7280", halo: "#ffffff",
@@ -81,7 +81,8 @@ export const campusStyle = (C = systemPalette()) => ({
     { id: "building-3d", type: "fill-extrusion", source: "openmaptiles", "source-layer": "building", minzoom: 13,
       filter: ["!", ["has", "hide_3d"]],
       paint: { "fill-extrusion-color": C.building, "fill-extrusion-height": ["get", "render_height"],
-        "fill-extrusion-base": ["get", "render_min_height"], "fill-extrusion-vertical-gradient": true } },
+        "fill-extrusion-base": ["get", "render_min_height"], "fill-extrusion-vertical-gradient": true,
+        "fill-extrusion-opacity": 0 } }, // shown by map.js once ETH buildings are sorted out, so they never flash cream
     // a few trees in parks and woods, filled in by plantTrees(); a small add-on
     { id: "trees", type: "fill-extrusion", source: "trees", minzoom: 14.5,
       paint: { "fill-extrusion-color": treeColour(C), "fill-extrusion-base": ["get", "b"], "fill-extrusion-height": ["get", "h"] } },
@@ -145,7 +146,8 @@ const inRing = ([x, y], ring) => {
   }
   return inside;
 };
-const inPoly = ([outer, ...holes], p) => inRing(p, outer) && !holes.some((h) => inRing(p, h));
+export const polys = (g) => (g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : []);
+export const inPoly = ([outer, ...holes], p) => inRing(p, outer) && !holes.some((h) => inRing(p, h));
 // The random seed changes every week (weeks start on Monday; 1 Jan 1970 was a Thursday, hence + 3), so the trees
 // rearrange once a week but stay put all week long, on every visit and every device.
 const WEEK = Math.floor((Date.now() / 864e5 + 3) / 7);
@@ -154,27 +156,27 @@ const M = 111320; // metres per degree of latitude
 // Fixed, not taken from the view: a grid that depends on the map centre moves on every pan and the trees jump.
 // shortcut: right for Zurich (the map is locked there); elsewhere the spacing would drift a bit.
 const K = Math.cos((47.38 * Math.PI) / 180);
-const circle = ([lon, lat], r, k, rot = 0) => [Array.from({ length: 13 }, (_, a) => // 12 sides: reads as round
-  [lon + (r * Math.cos(rot + (a * Math.PI) / 6)) / (M * k), lat + (r * Math.sin(rot + (a * Math.PI) / 6)) / M])];
+const circle = ([lon, lat], r, rot = 0) => [Array.from({ length: 13 }, (_, a) => // 12 sides: reads as round
+  [lon + (r * Math.cos(rot + (a * Math.PI) / 6)) / (M * K), lat + (r * Math.sin(rot + (a * Math.PI) / 6)) / M])];
 
 // Two kinds of tree, each a thin trunk plus stacked tiers:
 // round (broadleaf): a crown that widens then closes, so it reads round from any angle;
 // conifer: taller, narrowing in steps to a point, in a deeper green;
 // sphere (feuillu): a ball of leaves, sliced so each slice's width follows a sphere, plus a smaller ball beside it.
-function ball(at, R, z0, t, k, slices, rot, leaves) {
+function ball(at, R, z0, t, slices, rot, leaves) {
   return Array.from({ length: slices }, (_, n) => {
     const a = -1 + (2 * n) / slices, b = -1 + (2 * (n + 1)) / slices, mid = (a + b) / 2;
     return { type: "Feature", properties: { t, b: z0 + R * (1 + a), h: z0 + R * (1 + b), ...leaves },
-      geometry: { type: "Polygon", coordinates: circle(at, R * Math.sqrt(1 - mid * mid), k, rot) } };
+      geometry: { type: "Polygon", coordinates: circle(at, R * Math.sqrt(1 - mid * mid), rot) } };
   });
 }
 // rot: the tree's own random turn (radians), so no two trees face the same way.
 // leaves: extra properties for the crown only ({g, v} in autumn), never for the trunk.
-function tree(p, s, kind, k, rot, leaves) {
-  const part = (r, b, h, t, extra) => ({ type: "Feature", properties: { t, b, h, ...extra }, geometry: { type: "Polygon", coordinates: circle(p, r, k, rot) } });
+function tree(p, s, kind, rot, leaves) {
+  const part = (r, b, h, t, extra) => ({ type: "Feature", properties: { t, b, h, ...extra }, geometry: { type: "Polygon", coordinates: circle(p, r, rot) } });
   if (kind === "sphere") {
-    const side = [p[0] + (1.8 * s * Math.cos(rot)) / (M * k), p[1] + (1.8 * s * Math.sin(rot)) / M]; // the second ball, on a random side
-    return [part(0.35, 0, 3.5 * s, 2), ...ball(p, 2.8 * s, 2.6 * s, 4, k, 6, rot, leaves), ...ball(side, 1.7 * s, 2.4 * s, 4, k, 4, rot, leaves)];
+    const side = [p[0] + (1.8 * s * Math.cos(rot)) / (M * K), p[1] + (1.8 * s * Math.sin(rot)) / M]; // the second ball, on a random side
+    return [part(0.35, 0, 3.5 * s, 2), ...ball(p, 2.8 * s, 2.6 * s, 4, 6, rot, leaves), ...ball(side, 1.7 * s, 2.4 * s, 4, 4, rot, leaves)];
   }
   if (kind === "pine") return [part(0.3, 0, 2 * s, 2), part(2.2 * s, 1.8 * s, 4.6 * s, 3), part(1.6 * s, 4.6 * s, 7 * s, 3),
     part(1 * s, 7 * s, 9.2 * s, 3), part(0.45 * s, 9.2 * s, 11 * s, 3)];
@@ -214,16 +216,15 @@ export function plantTrees(map) {
     if (map.getZoom() < 14.5) return;
     // far out: only half the trees, always the same half, so zooming in only adds trees, never moves them
     const thin = map.getZoom() < 15.5 ? 0.5 : 1;
-    const v = map.getBounds(), k = K;
+    const v = map.getBounds();
     const seen = new Set(), out = [];
     for (const f of map.querySourceFeatures("openmaptiles", { sourceLayer: "landcover" })) {
       const wood = f.properties.class === "wood";
       if (!wood && !["park", "garden", "village_green"].includes(f.properties.subclass)) continue;
       // step: metres between candidate spots; keep: share of them that get a tree where the clump pattern is densest
       const step = wood ? 12 : 14, keep = wood ? 0.65 : 0.5;
-      const sLat = step / M, sLon = step / (M * k);
-      const ps = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [];
-      for (const poly of ps) {
+      const sLat = step / M, sLon = step / (M * K);
+      for (const poly of polys(f.geometry)) {
         const xs = poly[0].map((q) => q[0]), ys = poly[0].map((q) => q[1]);
         const x0 = Math.max(Math.min(...xs), v.getWest()), x1 = Math.min(Math.max(...xs), v.getEast());
         const y0 = Math.max(Math.min(...ys), v.getSouth()), y1 = Math.min(Math.max(...ys), v.getNorth());
@@ -244,7 +245,7 @@ export function plantTrees(map) {
             const leaves = leavesOf && kind !== "pine" ? leavesOf(p, i, j) : undefined; // conifers stay green
             // size: its own random draw, 0.6x to 1.7x, mostly small and medium with the odd big one
             const size = 0.6 + 1.1 * hash(i + 19, j + 23) ** 1.6;
-            out.push(...tree(p, size, kind, k, 2 * Math.PI * hash(j + 11, i + 5), leaves));
+            out.push(...tree(p, size, kind, 2 * Math.PI * hash(j + 11, i + 5), leaves));
           }
       }
     }
