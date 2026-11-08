@@ -235,6 +235,7 @@ function render() {
   $("#chips").innerHTML = FILTERS[state.tab].map(([k, label]) =>
     `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Free ${isNow() ? "now" : "then"}` : label}</button>`).join("");
   $("#when").hidden = state.tab !== "rooms";
+  $("#maplink").href = `map.html#${state.tab}`; // the map opens on the same tab
   const items = visible();
   $("#list").innerHTML = items.length
     ? items.map(state.tab === "spaces" ? spaceCard : roomCard).join("")

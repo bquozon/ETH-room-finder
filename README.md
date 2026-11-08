@@ -4,6 +4,7 @@ Unofficial ETH Zurich room finder. It shows how full the student study spaces ar
 
 - **Study spaces**: live occupancy, opening hours (including 24/7 access with an ETH card), sockets, noise level, food nearby.
 - **Free rooms**: "free until 14:15" or "busy, free from 13:00", with a bar of the day's bookings. Pick any day and time in the next week.
+- **Map** (`map.html`): a 3D map of the campus with a pin per building (live occupancy or free rooms), ETH buildings in ETH blue, light/dark following the system, and trees that follow the seasons (`?season=winter|spring|summer|autumn` to preview). Map data © OpenStreetMap contributors, tiles from [OpenFreeMap](https://openfreemap.org).
 - **Near me**: uses your browser's location. Distances are computed on your device, and your location never reaches the server.
 
 ## How it works
@@ -19,6 +20,8 @@ Visitors only ever load these copies, so ETH sees the same handful of requests w
 
 ```
 site/                 index.html, app.js (UI), logic.js (pure helpers + building coordinates), style.css
+                      map.html, map.js (map page), map-style.js (our map look, seasons, trees)
+site/vendor/          MapLibre GL JS 4.7.1, CSP build (BSD-3-Clause, licenses/)
 site/data/            generated JSON (git-ignored)
 api/                  visit statistics: stats.py (counting), server.py (/api/hit, /api/stats), Dockerfile
 scripts/              fetch_live.sh, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py

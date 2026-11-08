@@ -43,4 +43,9 @@ assert.equal(openingStatus(cafe, true, at(12)).open, false); // meal time
 assert.equal(openingStatus(cafe, true, at(12)).mealNow, true);
 assert.equal(openingStatus(cafe, false, new Date(2026, 10, 8, 12)).today, "Closed");
 assert.equal(openingStatus(["Sun: 10.00 - 16.00"], false, at(12)).open, null); // no line for Monday
+// Map seasons, from the date
+const { season } = await import("../site/map-style.js");
+const on = (m, d) => season(new Date(2026, m - 1, d));
+assert.deepEqual([on(1, 15), on(2, 28), on(3, 1), on(5, 31), on(6, 1), on(9, 21), on(9, 22), on(11, 30), on(12, 1)],
+  ["winter", "winter", "spring", "spring", "summer", "summer", "autumn", "autumn", "winter"]);
 console.log("logic ok");

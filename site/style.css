@@ -40,7 +40,14 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .locate[data-busy] svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.tabs { display: flex; gap: 4px; margin-top: 16px; }
+.tabrow { display: flex; gap: 4px; max-width: 760px; margin: 16px auto 0; padding-inline: 16px; }
+.tabrow .tabs { flex: 1; margin: 0; padding: 0; }
+.tabs { display: flex; gap: 4px; }
+.maplink {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px;
+  background: var(--chip); color: var(--text); font-weight: 600; text-decoration: none;
+}
+.maplink svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .tabs button {
   flex: 1; padding: 9px; border: 0; border-radius: 10px; background: var(--chip);
   font-weight: 600; cursor: pointer; color: var(--muted);

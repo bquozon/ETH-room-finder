@@ -34,8 +34,9 @@
 		root * /srv
 		# everything is small: re-check on every visit so a deploy or new data shows immediately
 		header Cache-Control "no-cache"
+		# connect-src: the map (map.html) loads its tiles and fonts from OpenFreeMap
 		header {
-			Content-Security-Policy "default-src 'self'; img-src 'self' https://ethz.ch data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+			Content-Security-Policy "default-src 'self'; img-src 'self' https://ethz.ch data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://tiles.openfreemap.org"
 			X-Content-Type-Options nosniff
 			Referrer-Policy strict-origin-when-cross-origin
 			X-Frame-Options SAMEORIGIN

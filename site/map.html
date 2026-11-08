@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Map · ETH Room Finder</title>
+<meta name="description" content="3D map of ETH Zurich: live occupancy of the study spaces and free lecture rooms, building by building.">
+<link rel="canonical" href="https://eth-rooms.bquozon.ch/map.html">
+<meta name="theme-color" content="#1f407a">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<!-- MapLibre GL JS 4.7.1 (BSD-3-Clause, licenses/), the CSP build: its worker is a file, not a blob -->
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/maplibre-gl-csp.js"></script>
+<script type="module" src="map.js"></script>
+<style>
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; } /* no pull-to-refresh or page scroll while using the map */
+  #map { position: fixed; inset: 0; }
+  /* floating controls over the map, thumb-sized */
+  .float { position: fixed; z-index: 2; display: flex; gap: 6px; }
+  .float.top { top: max(10px, env(safe-area-inset-top)); left: 10px; right: 60px; flex-wrap: wrap; }
+  .float.bottom { bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); }
+  .float button, .float a {
+    display: inline-flex; align-items: center; text-decoration: none; font-size: 15px;
+    min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
+    background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 2px 10px rgb(0 0 0 / .2);
+  }
+  .float a { color: var(--accent); }
+  .float button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  [data-mode="rooms"] { margin-right: 10px; } /* gap between the "what" pair and the style pair */
+  .maplibregl-ctrl-group button { width: 40px; height: 40px; }        /* bigger zoom/compass/locate buttons */
+  .maplibregl-ctrl-top-right { top: max(0px, env(safe-area-inset-top)); }
+
+  .pin { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+  .pin span {
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+    padding: 6px 11px; border-radius: 999px; font: 650 14px/1.2 system-ui, sans-serif;
+    background: #1d1f24; color: #fff; border: 2px solid var(--c);
+    box-shadow: 0 2px 8px rgb(0 0 0 / .3);
+  }
+  .pin span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .pin i { width: 2px; height: 26px; background: #1d1f24; }           /* stem: the pin "stands" on the building */
+  .pin em { width: 10px; height: 4px; border-radius: 50%; background: rgb(0 0 0 / .35); }  /* ground shadow */
+  .pin.dot span { font-size: 0; padding: 2px; gap: 0; }   /* decluttered: just the coloured dot, still tappable */
+  .pin.dot i { height: 10px; }
+  .pin.low { --c: var(--low); } .pin.medium { --c: var(--medium); } .pin.high { --c: var(--high); } .pin.unknown { --c: var(--unknown); }
+  .maplibregl-popup-content { background: var(--card); color: var(--text); border-radius: 14px; padding: 12px 14px; font: 14px/1.4 system-ui, sans-serif; }
+  .maplibregl-popup-tip { border-top-color: var(--card) !important; }
+  .maplibregl-popup-close-button { font-size: 22px; width: 36px; height: 36px; }
+  .pop h3 { margin: 0 0 4px; font-size: 15px; }
+  .pop ul { list-style: none; margin: 0 0 6px; padding: 0; max-height: 40vh; overflow: auto; }
+  .pop li { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .maperr { position: fixed; inset: 40% 16px auto; z-index: 3; text-align: center; background: var(--card); border-radius: 14px; padding: 16px; }
+  .pop small { display: block; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div id="map" role="region" aria-label="Map of the ETH buildings"></div>
+  <p class="maperr" id="maperr" hidden></p>
+  <div class="float top" id="styles"></div>
+  <div class="float bottom" id="campus">
+    <button data-go="z">Zentrum</button>
+    <button data-go="h">Hönggerberg</button>
+  </div>
+</body>
+</html>
