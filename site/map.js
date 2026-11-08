@@ -1,5 +1,5 @@
 import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, hhmm } from "./logic.js";
-import { campusStyle, systemPalette, applyPalette, plantTrees } from "./map-style.js";
+import { campusStyle, systemPalette, applyPalette, plantTrees, onTiles } from "./map-style.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const VIEWS = { z: { center: [8.5487, 47.3772], zoom: 16.6 }, h: { center: [8.5085, 47.4085], zoom: 16.4 } };
 const STYLES = { "3D": 60, "Flat": 0 }; // name: camera pitch (same map style, so switching is instant)
@@ -46,7 +46,7 @@ function collectEth() {
 }
 let baseFilter;
 function hideInBase() {
-  if (ethIds.size) map.setFilter("building-3d", ["all", baseFilter, ["!", ["in", ["id"], ["literal", [...ethIds]]]]]);
+  if (ethIds.size && baseFilter) map.setFilter("building-3d", ["all", baseFilter, ["!", ["in", ["id"], ["literal", [...ethIds]]]]]);
 }
 function addEthLayers() {
   baseFilter = map.getFilter("building-3d");
@@ -62,16 +62,35 @@ function addEthLayers() {
 }
 
 // ---- live occupancy, one pin per building
-// all data before the map exists: an await after it would miss the map's first "style.load"
 const fail = (text) => {
   const e = document.getElementById("maperr");
   e.innerHTML = `${text}<br><a href="./">Back to the list</a>`; e.hidden = false;
 };
 const getJSON = (p) => fetch(p, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); });
 // shortcut: loaded once, unlike the list (every minute); add a refresh if people keep the map open long
+const loading = Promise.all(["data/spaces.json", "data/availability.json", "data/rooms.json"].map(getJSON));
+
+// Most important first: the map starts while the data loads, looking straight down (only the few tiles
+// under the campus, the biggest download), then tilts to 3D once those are drawn.
+let map;
+try {
+  maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.js"); // the CSP build loads its worker from a file
+  map = new maplibregl.Map({
+    container: "map", style: campusStyle(), ...VIEWS.z, maxPitch: 70,
+    minZoom: 12, maxBounds: [[8.40, 47.33], [8.65, 47.45]], // stay around Zurich: you can't get lost off the map
+    attributionControl: { compact: true },
+  });
+} catch (e) { fail("Your browser can't show the map (WebGL is off or not supported)."); throw e; }
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));  // compass: tap to face north again
+map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }));
+map.once("load", () => { if (current === "3D" && !map.isMoving()) map.easeTo({ pitch: STYLES["3D"], bearing: -25, duration: 1200 }); });
+// before the await below, or the map's first "style.load" could be missed
+map.on("style.load", () => { addEthLayers(); plantTrees(map); });
+onTiles(map, collectEth);
+
 let spaces, avail, roomData;
 try {
-  [spaces, avail, roomData] = await Promise.all(["data/spaces.json", "data/availability.json", "data/rooms.json"].map(getJSON));
+  [spaces, avail, roomData] = await loading;
 } catch (e) { fail("Couldn't load the data. Please reload."); throw e; }
 const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
 const byBuilding = new Map();
@@ -83,17 +102,6 @@ for (const { attributes: a } of spaces.data) {
   (byBuilding.get(a.building) ?? byBuilding.set(a.building, []).get(a.building)).push({ ...a, pct, open });
 }
 
-let map;
-try {
-  maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.js"); // the CSP build loads its worker from a file
-  map = new maplibregl.Map({
-    container: "map", style: campusStyle(), ...VIEWS.z, pitch: 60, bearing: -25, maxPitch: 70,
-    minZoom: 12, maxBounds: [[8.40, 47.33], [8.65, 47.45]], // stay around Zurich: you can't get lost off the map
-    attributionControl: { compact: true },
-  });
-} catch (e) { fail("Your browser can't show the map (WebGL is off or not supported)."); throw e; }
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));  // compass: tap to face north again
-map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }));
 
 // ---- free rooms, same rules as the list (roomStatus: free until / free from, closed outside 07–21)
 const roomsBy = new Map();
@@ -161,11 +169,9 @@ function setStyle(name) {
   map.easeTo({ pitch: STYLES[name], bearing: STYLES[name] ? -25 : 0 });
   for (const c of document.querySelectorAll("[data-style]")) c.setAttribute("aria-pressed", c.dataset.style === name);
 }
-map.on("style.load", () => { addEthLayers(); plantTrees(map); });
 // light or dark map, following the phone/computer setting, switched live
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyPalette(map, systemPalette()));
 map.on("move", queueDeclutter);
-map.on("idle", collectEth);
 
 const bar = document.getElementById("styles");
 bar.innerHTML = `<a href="./">List</a><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button>` +

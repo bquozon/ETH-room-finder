@@ -252,7 +252,15 @@ export function plantTrees(map) {
     if (sig !== last) { last = sig; map.getSource("trees")?.setData({ type: "FeatureCollection", features: out }); }
   };
   let last = "";
-  // "idle": after the new view's tiles have loaded ("moveend" comes too early and left areas bare).
   // The signature check stops setData -> render -> idle from looping.
-  map.on("idle", plant);
+  onTiles(map, plant);
+}
+
+// Runs fn as tiles arrive (batched, so the centre shows before the horizon has loaded) and once all is
+// loaded ("idle", which also covers zooming in past the tiles' last level, when no new tile comes).
+// ("moveend" comes too early: it left areas bare.)
+export function onTiles(map, fn) {
+  let t;
+  map.on("sourcedata", (e) => { if (e.sourceId === "openmaptiles" && e.tile) { clearTimeout(t); t = setTimeout(fn, 200); } });
+  map.on("idle", fn);
 }
