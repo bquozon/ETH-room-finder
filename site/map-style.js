@@ -82,7 +82,7 @@ export const campusStyle = (C = systemPalette()) => ({
       filter: ["!", ["has", "hide_3d"]],
       paint: { "fill-extrusion-color": C.building, "fill-extrusion-height": ["get", "render_height"],
         "fill-extrusion-base": ["get", "render_min_height"], "fill-extrusion-vertical-gradient": true,
-        "fill-extrusion-opacity": 0 } }, // shown by map.js once ETH buildings are sorted out, so they never flash cream
+        "fill-extrusion-opacity": 0, "fill-extrusion-opacity-transition": { duration: 0 } } }, // shown by map.js once ETH ones are sorted out
     // a few trees in parks and woods, filled in by plantTrees(); a small add-on
     { id: "trees", type: "fill-extrusion", source: "trees", minzoom: 14.5,
       paint: { "fill-extrusion-color": treeColour(C), "fill-extrusion-base": ["get", "b"], "fill-extrusion-height": ["get", "h"] } },

@@ -75,9 +75,14 @@ map.once("load", () => { if (current === "3D" && !map.isMoving()) map.easeTo({ p
 // before the await below, or the map's first "style.load" could be missed
 map.on("style.load", () => { addEthLayers(); plantTrees(map); });
 onTiles(map, collectEth);
-// Swap only once our copies are drawn (hiding first left a gap, then blue), and show the buildings then.
+// Show the buildings once our copies are drawn (hiding first left a gap, then blue) and the base tiles are
+// re-cut without them: setFilter applies a few frames later, and until then both copies fought (stripes).
+let waiting = false;
 const showBuildings = () => map.getLayer("building-3d") && map.setPaintProperty("building-3d", "fill-extrusion-opacity", 1);
-map.on("sourcedata", (e) => { if (e.sourceId === "eth" && e.isSourceLoaded && pieces.size) { hideInBase(); showBuildings(); } });
+map.on("sourcedata", (e) => {
+  if (e.sourceId === "eth" && e.isSourceLoaded && pieces.size) { hideInBase(); waiting = true; }
+  else if (waiting && e.sourceId === "openmaptiles" && e.tile && map.isSourceLoaded("openmaptiles")) { waiting = false; showBuildings(); }
+});
 setTimeout(showBuildings, 3000); // no ETH building in sight: show the rest anyway
 
 let spaces, avail, roomData;
