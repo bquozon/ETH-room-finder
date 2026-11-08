@@ -36,6 +36,9 @@ ACTIONS = {
     "time": "Picked a time",
     "directions": "Opened directions",
     "floorplan": "Opened a floor plan",
+    "home_open": "Opened from home screen",
+    "a2hs_no": "Closed the home-screen hint",
+    "installed": "Added to home screen",
 }
 # first visit of the day: when this browser was last here (the page keeps only that date, on the phone)
 RETURNS = {"new": "First visit ever", "week": "Back within a week", "older": "Back after more than a week"}

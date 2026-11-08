@@ -313,7 +313,32 @@ function bind() {
   $("#locate").addEventListener("click", () => locate(state.watch == null));
 }
 
+// "Add to home screen", as on Poly+Uni Agenda: phones only, from the first visit, until closed.
+// Android: the browser's own install dialog; iPhone: how to do it (Safari has no button for it).
+function setupInstall() {
+  if (matchMedia("(display-mode: standalone)").matches || navigator.standalone) return STATS.act("home_open");
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua);
+  if (!/Android|iPhone|iPad|iPod/.test(ua) || /Instagram|FBAN|FBAV|Line\//.test(ua)) return; // in-app browsers can't add
+  if (store.get("a2hs", "") === "no") return;
+  const bar = $("#a2hs"), never = () => store.set("a2hs", "no");
+  const show = () => setTimeout(() => { bar.hidden = false; }, 8000);
+  $("#a2hsX").addEventListener("click", () => { bar.hidden = true; never(); STATS.act("a2hs_no"); });
+  window.addEventListener("appinstalled", () => { bar.hidden = true; never(); STATS.act("installed"); });
+  if (ios) {
+    $("#a2hsText").innerHTML = 'Add Room Finder to your home screen: tap Share <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v12M8.5 6.5 12 3l3.5 3.5M8 10H6v10h12V10h-2"/></svg>, then “Add to Home Screen”.';
+    return show();
+  }
+  window.addEventListener("beforeinstallprompt", (ev) => { // Chrome/Edge/Samsung on Android: one-tap install
+    ev.preventDefault();
+    $("#a2hsText").textContent = "Add Room Finder to your home screen: one tap to find a free spot.";
+    $("#a2hsAdd").hidden = false;
+    $("#a2hsAdd").onclick = () => { bar.hidden = true; ev.prompt(); };
+    show();
+  });
+}
+
 async function main() {
+  setupInstall(); // first: Android fires its event early
   bind();
   STATS.view();
   try {
