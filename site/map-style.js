@@ -257,11 +257,12 @@ export function plantTrees(map) {
   onTiles(map, plant);
 }
 
-// Runs fn as tiles arrive (batched, so the centre shows before the horizon has loaded) and once all is
+// Runs fn as tiles arrive while the camera is still (batched, so the centre shows before the horizon has loaded) and once all is
 // loaded ("idle", which also covers zooming in past the tiles' last level, when no new tile comes).
 // ("moveend" comes too early: it left areas bare.)
 export function onTiles(map, fn) {
   let t;
-  map.on("sourcedata", (e) => { if (e.sourceId === "openmaptiles" && e.tile) { clearTimeout(t); t = setTimeout(fn, 200); } });
+  // not while the camera moves: redrawing our layers mid-flight stutters; "idle" catches up once it stops
+  map.on("sourcedata", (e) => { if (e.sourceId === "openmaptiles" && e.tile) { clearTimeout(t); t = setTimeout(() => map.isMoving() || fn(), 200); } });
   map.on("idle", fn);
 }

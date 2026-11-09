@@ -1,6 +1,6 @@
 // node scripts/test_logic.mjs
 import assert from "node:assert/strict";
-import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule, uniOf, roomTitle } from "../site/logic.js";
+import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule, uniOf, roomTitle, placeOrder } from "../site/logic.js";
 
 // HG -> CAB is ~220 m
 const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
@@ -49,6 +49,16 @@ assert.deepEqual(daySchedule([["2026-11-09T06:00:00", "2026-11-09T08:00:00"], ["
 const tl = dayTimeline(busy, at(9));
 assert.equal(tl.length, 3);
 assert.ok(Math.abs(tl[0][0] - 3.25 / 14) < 1e-9);
+
+// Inside one building: tracked, then libraries, then small rooms; bigger first
+const inHG = [
+  { title: "HG J 60.0039", description: "Korridor HG J Nord", pct: null, seats: 10 },
+  { title: "HG H 30.0059", description: "ETH-Bibliothek, Atrium Nord", pct: null, seats: 14 },
+  { title: "HG E 20.0029", description: "Risalit HG E Nord", pct: null, seats: 30 },
+  { title: "HG H 30.1", description: "ETH-Bibliothek, Lesesaal", pct: 80, seats: 100 },
+  { title: "UB Law", description: "UZH library", pct: null, seats: 500 },
+];
+assert.deepEqual([...inHG].sort(placeOrder).map((s) => s.title), ["HG H 30.1", "UB Law", "HG H 30.0059", "HG E 20.0029", "HG J 60.0039"]);
 
 assert.equal(occupancyLevel(null), "unknown");
 assert.equal(occupancyLevel(40), "low");

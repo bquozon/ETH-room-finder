@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, roomTitle, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
+import { BUILDINGS, campusOf, roomTitle, placeOrder, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -166,11 +166,10 @@ function visible() {
 
   const byDist = (a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9);
   if (state.tab === "spaces") {
-    // Near me: closest first, but nudge nearly-full places down so a 5-min-further empty one wins.
-    const score = (s) => state.pos
-      ? (s.dist ?? 1e9) + (s.pct >= 90 ? 600 : s.pct >= 75 ? 250 : 0) + (s.open.open === false ? 1e6 : 0)
-      : (s.pct ?? 101) + (s.open.open === false ? 1000 : 0);
-    items.sort((a, b) => score(a) - score(b));
+    // Near me: closed last, then nearest building (a building's places share its point), then inside a
+    // building the important places before small rooms and corridors. Otherwise: emptiest first.
+    if (state.pos) items.sort((a, b) => (a.open.open === false) - (b.open.open === false) || byDist(a, b) || placeOrder(a, b));
+    else items.sort((a, b) => ((a.pct ?? 101) + (a.open.open === false ? 1000 : 0)) - ((b.pct ?? 101) + (b.open.open === false ? 1000 : 0)));
   } else {
     const freeMins = (r) => (r.status.free ? (r.status.until - at) / 6e4 : -1);
     items.sort((a, b) => (b.status.free - a.status.free) || (state.pos ? byDist(a, b) : freeMins(b) - freeMins(a)));

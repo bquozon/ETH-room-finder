@@ -147,6 +147,10 @@ export function openingStatus(hours, has24h, at = new Date()) {
   };
 }
 
+// Study places in one building: occupancy-tracked first, then libraries, then the rest; bigger first within each.
+const rank = (s) => (s.pct != null ? 2 : /bibliothek|library|^UB /i.test(`${s.title} ${s.description ?? ""}`) ? 1 : 0);
+export const placeOrder = (a, b) => rank(b) - rank(a) || (b.seats || 0) - (a.seats || 0);
+
 export const occupancyLevel = (pct) =>
   pct == null ? "unknown" : pct < 50 ? "low" : pct < 80 ? "medium" : "high";
 
