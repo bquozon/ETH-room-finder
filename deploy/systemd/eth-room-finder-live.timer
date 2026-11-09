@@ -1,5 +1,5 @@
 [Unit]
-Description=ETH Room Finder: live occupancy every minute
+Description=PolyUni Room Finder: live occupancy every minute
 
 [Timer]
 OnBootSec=30s

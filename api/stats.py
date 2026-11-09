@@ -1,4 +1,4 @@
-"""Private, cookie-free visitor statistics for ETH Room Finder (ported from Poly+Uni Agenda's submit/stats.py).
+"""Private, cookie-free visitor statistics for PolyUni Room Finder (ported from Poly+Uni Agenda's submit/stats.py).
 
 The page sends small anonymous "hits" (page view, search, filter, click). Only daily totals are kept:
 no IP address, no cookie, no cross-day identifier. A visitor is counted once per day through a hash of

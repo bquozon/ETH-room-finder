@@ -1,5 +1,5 @@
 [Unit]
-Description=ETH Room Finder: room bookings twice a day
+Description=PolyUni Room Finder: room bookings twice a day
 
 [Timer]
 OnCalendar=*-*-* 05,12:15:00

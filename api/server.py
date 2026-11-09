@@ -1,4 +1,4 @@
-"""ETH Room Finder's small API: anonymous visit statistics, the same as Poly+Uni Agenda's.
+"""PolyUni Room Finder's small API: anonymous visit statistics, the same as Poly+Uni Agenda's.
 
   POST /api/hit                 a hit from the page (see stats.py). Always 204.
   GET  /api/stats?days=30       the statistics page (password: Caddy's basic_auth, see deploy/docker-web/Caddyfile)

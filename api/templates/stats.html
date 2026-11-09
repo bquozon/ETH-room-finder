@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Stats · ETH Room Finder</title>
+<title>Stats · PolyUni Room Finder</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>{{ CSS|safe }}</style>
 </head>
@@ -33,7 +33,7 @@
 {% endmacro %}
 
 <h1>Visitors{% if day %} on {{ day.strftime("%A %d %B %Y") }}{% endif %}</h1>
-<p class="sub">ETH Room Finder · anonymous daily totals: no cookies, no IP addresses stored. Bots are left out.</p>
+<p class="sub">PolyUni Room Finder · anonymous daily totals: no cookies, no IP addresses stored. Bots are left out.</p>
 <nav>
   {% for n, label in ((1, "Today"), (7, "7 days"), (30, "30 days"), (90, "90 days"), (365, "1 year")) %}
     <a href="stats?days={{ n }}" class="{{ 'on' if n == days and not day }}">{{ label }}</a>

@@ -1,4 +1,4 @@
-# ETH Room Finder
+# PolyUni Room Finder
 
 Unofficial ETH Zurich room finder. It shows how full the student study spaces are right now, which lecture and seminar rooms are free (today or any day this week), and sorts everything by walking distance from you.
 

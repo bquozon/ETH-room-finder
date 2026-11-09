@@ -1,5 +1,5 @@
 [Unit]
-Description=ETH Room Finder: scrape room bookings for the next 7 days
+Description=PolyUni Room Finder: scrape room bookings for the next 7 days
 After=network-online.target
 Wants=network-online.target
 OnFailure=eth-room-finder-alert@%n.service

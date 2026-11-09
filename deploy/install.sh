@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install or update ETH Room Finder on a Debian/Ubuntu VPS. Same layout as Poly+Uni Agenda.
+# Install or update PolyUni Room Finder on a Debian/Ubuntu VPS. Same layout as Poly+Uni Agenda.
 #
 #   git clone https://github.com/bquozon/ETH-room-finder.git /opt/eth-room-finder
 #   sudo bash /opt/eth-room-finder/deploy/install.sh rooms.example.ch    # first time: the site's address

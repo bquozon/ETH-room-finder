@@ -1,5 +1,5 @@
 [Unit]
-Description=ETH Room Finder: copy live study-space occupancy
+Description=PolyUni Room Finder: copy live study-space occupancy
 After=network-online.target
 Wants=network-online.target
 OnFailure=eth-room-finder-alert@%n.service
