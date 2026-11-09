@@ -156,9 +156,10 @@ function showPins() {
     el.className = `pin ${level}`;
     el.innerHTML = `<span>${esc(b)}${text}</span><i></i><em></em>`;
     const [lat, lon] = BUILDINGS[b];
+    const all = mode === "spaces" && roomsBy.has(b) ? `<button class="all" data-all="${esc(b)}">See all (+${roomsBy.get(b).length} rooms)</button>` : "";
     const popup = new maplibregl.Popup({ offset: 56, maxWidth: "min(320px, 88vw)" }).setHTML(
       `<div class="pop"><h3>${esc(b)} · ${uniOf(b).toUpperCase()} ${campusOf(b)}</h3><ul>${rows.join("")}</ul>
-       <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${lat},${lon}">Directions</a></div>`);
+       ${all}<a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${lat},${lon}">Directions</a></div>`);
     // tapping a pin also brings the building to the middle, so the popup is never cut off
     el.addEventListener("click", () => map.easeTo({ center: [lon, lat], offset: [0, 120], duration: 500 }));
     const m = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lon, lat]).setPopup(popup).addTo(map);
@@ -197,6 +198,12 @@ bar.addEventListener("click", (e) => {
   try { localStorage.setItem("tab", JSON.stringify(mode)); } catch {}
 });
 showPins();
+// "See all" in a study-spaces popup: append that building's rooms below its spaces
+map.getContainer().addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-all]"); if (!btn) return;
+  btn.closest(".pop").querySelector("ul").insertAdjacentHTML("beforeend", `<li class="sub">Rooms</li>${roomsPin(roomsBy.get(btn.dataset.all))[3].join("")}`);
+  btn.remove();
+});
 
 document.getElementById("campus").addEventListener("click", (e) => {
   if (e.target.closest("#tilt")) return setStyle(current === "3D" ? "Flat" : "3D");
