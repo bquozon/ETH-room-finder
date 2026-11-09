@@ -1,34 +1,36 @@
-import { BUILDINGS, campusOf, occupancyLevel, openingStatus, roomStatus, shortStay, hhmm, esc, getJSON } from "./logic.js";
+import { BUILDINGS, campusOf, uniOf, roomTitle, occupancyLevel, openingStatus, roomStatus, shortStay, hhmm, esc, getJSON } from "./logic.js";
 import { campusStyle, systemPalette, applyPalette, plantTrees, onTiles, polys, inPoly } from "./map-style.js";
-const VIEWS = { z: { center: [8.5487, 47.3772], zoom: 16.6 }, h: { center: [8.5085, 47.4085], zoom: 16.4 } };
+const VIEWS = { z: { center: [8.5487, 47.3772], zoom: 16.6 }, h: { center: [8.5085, 47.4085], zoom: 16.4 },
+  i: { center: [8.5495, 47.3972], zoom: 16.4 }, o: { center: [8.5465, 47.4125], zoom: 16.2 } };
 const STYLES = { "3D": 60, "Flat": 0 }; // name: camera pitch (same map style, so switching is instant)
 let current = "3D";
 
 // ---- ETH buildings: the OSM outlines that contain one of our building points, drawn in ETH colour
 // as their own layer on top (recolouring the base layer by id glitched). Tiles only load for what is
 // on screen, so keep collecting as the user pans.
-const PTS = Object.values(BUILDINGS).map(([lat, lon]) => [lon, lat]);
-// A tile feature can bundle many buildings (MultiPolygon). So: take every feature that holds an ETH
-// point out of the base layer (by id) and redraw it in our own layer, ETH polygons teal, the rest grey.
+const PTS = Object.entries(BUILDINGS).map(([b, [lat, lon]]) => [[lon, lat], uniOf(b)]);
+// A tile feature can bundle many buildings (MultiPolygon). So: take every feature that holds a university
+// point out of the base layer (by id) and redraw it in our own layer, ETH and UZH polygons in their colour, the rest grey.
 // Drawing a copy on top instead made the walls flicker (two identical shapes fighting).
 // shortcut: a building cut by a tile edge only gets the half under its point coloured; ship a footprint file if that shows.
 // OSM often has a building twice: its outline (hide_3d, not extruded) and its parts (extruded, with
-// heights). A polygon is ETH if it holds one of our points, or if it is a part lying inside such an outline.
-const ethIds = new Set(), pieces = new Map(), outlines = new Map();
-const holdsPoint = (poly) => PTS.some((p) => inPoly(poly, p));
+// heights). A polygon is ETH's (or UZH's) if it holds one of its points, or if it is a part lying inside such an outline.
+const ethIds = new Set(), pieces = new Map(), outlines = new Map(); // outlines: key -> [poly, uni]
+const pointIn = (poly) => PTS.find(([p]) => inPoly(poly, p))?.[1];
 const middle = ([ring]) => ring.reduce(([x, y], [a, b]) => [x + a / ring.length, y + b / ring.length], [0, 0]);
-const isEth = (poly) => holdsPoint(poly) || [...outlines.values()].some((o) => inPoly(o, middle(poly)));
+// "eth", "uzh" or undefined (a neighbour)
+const uniIn = (poly) => pointIn(poly) ?? [...outlines.values()].find(([o]) => inPoly(o, middle(poly)))?.[1];
 function collectEth() {
   const fs = map.querySourceFeatures("openmaptiles", { sourceLayer: "building" });
   const n = pieces.size;
-  for (const f of fs) for (const poly of polys(f.geometry)) if (holdsPoint(poly)) outlines.set(JSON.stringify(poly[0][0]), poly);
-  for (const f of fs) if (f.id != null && !ethIds.has(f.id) && polys(f.geometry).some(isEth)) ethIds.add(f.id);
+  for (const f of fs) for (const poly of polys(f.geometry)) { const u = pointIn(poly); if (u) outlines.set(JSON.stringify(poly[0][0]), [poly, u]); }
+  for (const f of fs) if (f.id != null && !ethIds.has(f.id) && polys(f.geometry).some(uniIn)) ethIds.add(f.id);
   for (const f of fs) if (ethIds.has(f.id)) for (const poly of polys(f.geometry)) {
     const key = f.id + JSON.stringify(poly[0][0]);
     if (!pieces.has(key)) pieces.set(key, { type: "Feature", geometry: { type: "Polygon", coordinates: poly }, properties: { ...f.properties } });
   }
   if (pieces.size !== n) {
-    for (const p of pieces.values()) p.properties.eth = isEth(p.geometry.coordinates); // outlines may have arrived after the parts
+    for (const p of pieces.values()) p.properties.uni = uniIn(p.geometry.coordinates) ?? ""; // outlines may have arrived after the parts
     map.getSource("eth")?.setData({ type: "FeatureCollection", features: [...pieces.values()] });
   }
 }
@@ -41,11 +43,12 @@ function addEthLayers() {
   map.addSource("eth", { type: "geojson", data: { type: "FeatureCollection", features: [...pieces.values()] } });
   const solid = ["!", ["has", "hide_3d"]], shape = {
     "fill-extrusion-height": ["coalesce", ["get", "render_height"], 10], "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0] };
-  // the neighbours that came along in the same tile feature keep the normal cream; ETH ones turn blue
-  map.addLayer({ id: "eth-others", type: "fill-extrusion", source: "eth", filter: ["all", solid, ["!", ["get", "eth"]]],
+  // the neighbours that came along in the same tile feature keep the normal cream; ETH ones turn blue, UZH ones their own blue
+  const of = (u) => ["all", solid, ["==", ["get", "uni"], u]];
+  map.addLayer({ id: "eth-others", type: "fill-extrusion", source: "eth", filter: of(""),
     paint: { "fill-extrusion-color": map.getPaintProperty("building-3d", "fill-extrusion-color"), ...shape } }, "street-name");
-  map.addLayer({ id: "eth", type: "fill-extrusion", source: "eth", filter: ["all", solid, ["get", "eth"]],
-    paint: { "fill-extrusion-color": systemPalette().eth, ...shape } }, "street-name");
+  for (const u of ["eth", "uzh"]) map.addLayer({ id: u, type: "fill-extrusion", source: "eth", filter: of(u),
+    paint: { "fill-extrusion-color": systemPalette()[u], ...shape } }, "street-name");
   hideInBase();
 }
 
@@ -55,7 +58,8 @@ const fail = (text) => {
   e.innerHTML = `${text}<br><a href="./">Back to the list</a>`; e.hidden = false;
 };
 // shortcut: loaded once, unlike the list (every minute); add a refresh if people keep the map open long
-const loading = Promise.all(["data/spaces.json", "data/availability.json", "data/rooms.json"].map(getJSON));
+const loading = Promise.all([...["data/spaces.json", "data/availability.json", "data/rooms.json"].map(getJSON),
+  getJSON("data/uzh_spaces.json").catch(() => ({ spaces: [] }))]);
 
 // Most important first: the map starts while the data loads, looking straight down (only the few tiles
 // under the campus, the biggest download), then tilts to 3D once those are drawn.
@@ -85,26 +89,24 @@ map.on("sourcedata", (e) => {
 });
 setTimeout(showBuildings, 3000); // no ETH building in sight: show the rest anyway
 
-let spaces, avail, roomData;
+let spaces, avail, roomData, uzh;
 try {
-  [spaces, avail, roomData] = await loading;
+  [spaces, avail, roomData, uzh] = await loading;
 } catch (e) { fail("Couldn't load the data. Please reload."); throw e; }
 const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
 const byBuilding = new Map();
+const add = (m, b, x) => BUILDINGS[b] && (m.get(b) ?? m.set(b, []).get(b)).push(x);
 for (const { attributes: a } of spaces.data) {
-  if (!BUILDINGS[a.building]) continue;
   const l = live.get(a.roomGlobalIdentifier) || {};
   const pct = l.status && l.status !== "unknown" ? l.occupancyPercentage ?? null : null;
-  const open = openingStatus(a.hours || [], a.has24HourAccess).open;
-  (byBuilding.get(a.building) ?? byBuilding.set(a.building, []).get(a.building)).push({ ...a, pct, open });
+  add(byBuilding, a.building, { ...a, pct, open: openingStatus(a.hours || [], a.has24HourAccess).open });
 }
+// UZH sensors say open (a count) or closed; the Zentralbibliothek has hours instead (as in the list)
+for (const u of uzh.spaces) add(byBuilding, u.building, { ...u, open: u.closed ? false : u.pct != null || openingStatus(u.hours, false).open });
 
 // ---- free rooms, same rules as the list (roomStatus: free until / free from, closed outside 07–21)
 const roomsBy = new Map();
-for (const r of roomData.rooms) {
-  if (!BUILDINGS[r.building]) continue;
-  (roomsBy.get(r.building) ?? roomsBy.set(r.building, []).get(r.building)).push({ ...r, status: roomStatus(r.busy) });
-}
+for (const r of roomData.rooms) add(roomsBy, r.building, { ...r, status: roomStatus(r.busy) });
 
 // One pin per building: [colour level, text after the code, popup rows]
 function spacesPin(xs) {
@@ -120,7 +122,7 @@ function roomsPin(xs) {
   const rows = [...xs].sort((a, b) => b.status.free - a.status.free).map((r) => {
     const [text, lvl] = label(r.status), left = shortStay(r.status, new Date());
     const warn = left == null ? "" : `<small class="warn">⚠ only ${left} min left</small>`;
-    return `<li><span>${esc(`${r.building} ${r.floor} ${r.room}`)}<small>${Number(r.seats) ? `${r.seats} seats` : ""}</small>${warn}</span><b class="${lvl}">${text}</b></li>`;
+    return `<li><span>${esc(roomTitle(r))}<small>${Number(r.seats) ? `${r.seats} seats` : ""}</small>${warn}</span><b class="${lvl}">${text}</b></li>`;
   });
   return [closed ? "unknown" : free ? "low" : "high", closed ? "" : ` · ${free} free`, free, rows];
 }
@@ -141,16 +143,18 @@ const queueDeclutter = () => { if (!queued) { queued = true; requestAnimationFra
 
 // opens on the list's tab (map.html#rooms), and the list follows a switch made here
 let mode = location.hash === "#rooms" ? "rooms" : "spaces", markers = [];
+// ETH / UZH / Both: the same choice as the list ("uni" in localStorage, JSON like the list's store)
+let uni = (() => { try { return JSON.parse(localStorage.getItem("uni")) || "both"; } catch { return "both"; } })();
 function showPins() {
   for (const m of markers) m.remove();
-  markers = [...(mode === "spaces" ? byBuilding : roomsBy)].map(([b, xs]) => {
+  markers = [...(mode === "spaces" ? byBuilding : roomsBy)].filter(([b]) => uni === "both" || uniOf(b) === uni).map(([b, xs]) => {
     const [level, text, prio, rows] = (mode === "spaces" ? spacesPin : roomsPin)(xs);
     const el = document.createElement("div");
     el.className = `pin ${level}`;
     el.innerHTML = `<span>${esc(b)}${text}</span><i></i><em></em>`;
     const [lat, lon] = BUILDINGS[b];
     const popup = new maplibregl.Popup({ offset: 56, maxWidth: "min(320px, 88vw)" }).setHTML(
-      `<div class="pop"><h3>${esc(b)} · ${campusOf(b)}</h3><ul>${rows.join("")}</ul>
+      `<div class="pop"><h3>${esc(b)} · ${uniOf(b).toUpperCase()} ${campusOf(b)}</h3><ul>${rows.join("")}</ul>
        <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${lat},${lon}">Directions</a></div>`);
     // tapping a pin also brings the building to the middle, so the popup is never cut off
     el.addEventListener("click", () => map.easeTo({ center: [lon, lat], offset: [0, 120], duration: 500 }));
@@ -159,6 +163,9 @@ function showPins() {
   });
   declutter();
   for (const c of document.querySelectorAll("[data-mode]")) c.setAttribute("aria-pressed", c.dataset.mode === mode);
+  for (const c of document.querySelectorAll("[data-uni]")) c.setAttribute("aria-pressed", c.dataset.uni === uni);
+  // campus buttons of the chosen university only (data-for: who has buildings there)
+  for (const c of document.querySelectorAll("[data-for]")) c.hidden = uni !== "both" && !c.dataset.for.includes(uni);
 }
 
 function setStyle(name) {
@@ -172,8 +179,15 @@ map.on("move", queueDeclutter);
 
 const bar = document.getElementById("styles");
 bar.innerHTML = `<a href="./" class="back" aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
-  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button></div>`;
+  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button></div>
+  <div class="seg" role="group" aria-label="University"><button data-uni="eth">ETH</button><button data-uni="uzh">UZH</button><button data-uni="both">Both</button></div>`;
 bar.addEventListener("click", (e) => {
+  const u = e.target.closest("[data-uni]");
+  if (u) {
+    uni = u.dataset.uni; showPins();
+    try { localStorage.setItem("uni", JSON.stringify(uni)); } catch {}
+    return;
+  }
   const c = e.target.closest("[data-mode]"); if (!c) return;
   mode = c.dataset.mode; showPins();
   history.replaceState(null, "", `#${mode}`);

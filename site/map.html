@@ -22,8 +22,11 @@
   #map { position: fixed; inset: 0; }
   /* floating controls over the map, thumb-sized */
   .float { position: fixed; z-index: 2; display: flex; gap: 6px; }
-  .float.up { top: max(10px, env(safe-area-inset-top)); left: 10px; right: 60px; } /* right: room for the zoom buttons */
-  .float.bottom { bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); white-space: nowrap; }
+  .float.up { top: max(10px, env(safe-area-inset-top)); left: 10px; right: 60px; flex-wrap: wrap; } /* right: room for the zoom buttons */
+  /* with ETH + UZH there are 4 campuses: on a phone the row scrolls sideways */
+  .float.bottom { bottom: max(28px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); white-space: nowrap;
+    max-width: calc(100vw - 20px); overflow-x: auto; scrollbar-width: none; padding: 4px 2px 10px; }
+  .float button[hidden] { display: none; }
   .float button, .float a {
     display: inline-flex; align-items: center; text-decoration: none; font-size: 15px;
     min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
@@ -73,13 +76,15 @@
 </style>
 </head>
 <body>
-  <div id="map" role="region" aria-label="Map of the ETH buildings"></div>
+  <div id="map" role="region" aria-label="Map of the ETH and UZH buildings"></div>
   <p class="maperr" id="maperr" hidden></p>
   <div class="float up" id="styles"></div>
   <div class="float bottom" id="campus">
+    <button id="tilt" aria-pressed="true">3D</button><!-- first: never scrolled out of sight -->
     <button data-go="z">Zentrum</button>
-    <button data-go="h">Hönggerberg</button>
-    <button id="tilt" aria-pressed="true">3D</button>
+    <button data-go="h" data-for="eth">Hönggerberg</button>
+    <button data-go="i" data-for="uzh">Irchel</button>
+    <button data-go="o" data-for="uzh">Oerlikon</button>
   </div>
 </body>
 </html>

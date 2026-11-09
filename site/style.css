@@ -55,6 +55,13 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
 
 .controls { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-block: 12px 8px; }
+/* ETH / UZH / Both: one pill, pick one */
+.controls .seg { display: flex; padding: 3px; margin-bottom: 8px; border-radius: 12px; background: var(--chip); }
+.controls .seg button {
+  flex: 1; padding: 6px; border: 0; border-radius: 9px; background: transparent;
+  font-weight: 600; cursor: pointer; color: var(--muted);
+}
+.controls .seg button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
 .search input {
   width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--card); outline-offset: 2px;

@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
+import { BUILDINGS, campusOf, roomTitle, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -49,10 +49,14 @@ const STATS = (() => {
   };
 })();
 
+// Campus chips: the label is the campus name (campusOf). Only the campuses of the chosen university show.
+const CAMPUS = [
+  ["zentrum", "Zentrum"], ["hongg", "Hönggerberg"], ["irchel", "Irchel"], ["oerlikon", "Oerlikon"],
+].map(([k, name]) => [k, name, (x) => x.campus === name]);
+const isCampus = ([k]) => CAMPUS.some(([c]) => c === k);
 const FILTERS = {
   spaces: [
-    ["zentrum", "Zentrum", (s) => s.campus === "Zentrum"],
-    ["hongg", "Hönggerberg", (s) => s.campus === "Hönggerberg"],
+    ...CAMPUS,
     ["open", "Open now", (s) => s.open.open === true],
     ["live", "Live data", (s) => s.pct != null],
     ["calm", "Not noisy", (s) => !s.keys.has("um.laut")],
@@ -60,8 +64,7 @@ const FILTERS = {
     ["food", "Food nearby", (s) => s.keys.has("food.mensa") || s.keys.has("food.cafeteria")],
   ],
   rooms: [
-    ["zentrum", "Zentrum", (r) => r.campus === "Zentrum"],
-    ["hongg", "Hönggerberg", (r) => r.campus === "Hönggerberg"],
+    ...CAMPUS,
     ["free", "Free now", (r) => r.status.free],
     ["big", "50+ seats", (r) => r.seats >= 50],
   ],
@@ -69,6 +72,7 @@ const FILTERS = {
 
 const state = {
   tab: store.get("tab", "spaces"),
+  uni: store.get("uni", "both"), // "eth" | "uzh" | "both", shared with the map
   on: store.get("filters", { spaces: [], rooms: ["free"] }),
   q: "",
   pos: null,       // [lat, lon] once located
@@ -100,14 +104,16 @@ const stamp = (d) => d.toDateString() === new Date().toDateString() ? hhmm(d) : 
 
 // Spaces and rooms share one shape: title, building, campus, coord, seats, link (floor plan).
 async function loadSpaces() {
-  const [spaces, avail] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json")]);
+  const [spaces, avail, uzh] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json"),
+    getJSON("data/uzh_spaces.json").catch(() => ({ spaces: [] }))]); // UZH missing: ETH still works
   const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
+  const uzhAt = uzh.generated && new Date(uzh.generated);
   state.spaces = spaces.data.map(({ attributes: a }) => {
     const l = live.get(a.roomGlobalIdentifier) || {};
     const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
     const features = a.features || [];
     return {
-      title: a.title, description: a.description, building: a.building,
+      uni: "eth", title: a.title, description: a.description, building: a.building,
       campus: campusOf(a.building), coord: BUILDINGS[a.building], seats: a.seats,
       link: a.locationPageUrl && ETH + a.locationPageUrl, img: a.image && ETH + a.image,
       has24h: !!a.has24HourAccess, hours: a.hours || [],
@@ -115,7 +121,10 @@ async function loadSpaces() {
       pct: ok ? l.occupancyPercentage : null, occupancy: l.occupancy, max: l.maxPeople, trend: ok ? l.trend : null,
       updated: ok && l.timestamp ? new Date(l.timestamp) : null,
     };
-  });
+  }).concat(uzh.spaces.map((u) => ({
+    ...u, uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
+    max: u.seats, updated: u.pct != null ? uzhAt : null,
+  })));
   const times = state.spaces.map((s) => s.updated).filter(Boolean);
   state.updated = times.length ? new Date(Math.max(...times)) : null;
 }
@@ -124,22 +133,30 @@ async function loadRooms() {
   const data = await getJSON("data/rooms.json");
   state.roomsAt = data.generated ? new Date(data.generated) : null;
   state.rooms = data.rooms.map((r) => ({
-    ...r, title: `${r.building} ${r.floor} ${r.room}`, campus: campusOf(r.building), coord: BUILDINGS[r.building],
+    ...r, uni: r.uni || "eth", title: roomTitle(r), campus: campusOf(r.building), coord: BUILDINGS[r.building],
     seats: Number(r.seats) || 0,
-    link: `${ETH}/en/utils/location.html?${new URLSearchParams({ building: r.building, floor: r.floor, room: r.room })}`,
+    link: r.uni !== "uzh" && `${ETH}/en/utils/location.html?${new URLSearchParams({ building: r.building, floor: r.floor, room: r.room })}`,
   }));
 }
 
+const ofUni = (x) => state.uni === "both" || x.uni === state.uni;
+// The current tab's places at the chosen university, and the campuses they are on.
+const mine = () => (state.tab === "spaces" ? state.spaces : state.rooms).filter(ofUni);
+const campusesOf = (xs) => new Set(xs.map((x) => x.campus));
+
+// UZH's sensors only say open (a count) or closed; the Zentralbibliothek has hours instead.
+const spaceOpen = (s, now) => s.closed ? { open: false } : s.uni === "uzh" && s.pct != null ? { open: true } : openingStatus(s.hours, s.has24h, now);
+
 // Spaces/rooms with distance attached, filtered and sorted for display.
 function visible() {
-  const now = new Date(), at = when();
+  const now = new Date(), at = when(), xs = mine(), here = campusesOf(xs);
   const list = state.tab === "spaces"
-    ? state.spaces.map((s) => ({ ...s, open: openingStatus(s.hours, s.has24h, now) }))
-    : state.rooms.map((r) => ({ ...r, status: roomStatus(r.busy, at) }));
+    ? xs.map((s) => ({ ...s, open: spaceOpen(s, now) }))
+    : xs.map((r) => ({ ...r, status: roomStatus(r.busy, at) }));
   const active = FILTERS[state.tab].filter(([k]) => state.on[state.tab].includes(k));
-  // Campus chips are alternatives (OR); the rest narrow down (AND).
-  const campus = active.filter(([k]) => k === "zentrum" || k === "hongg");
-  const rest = active.filter((f) => !campus.includes(f));
+  // Campus chips are alternatives (OR); the rest narrow down (AND). A chip hidden by the uni switch doesn't count.
+  const campus = active.filter((f) => isCampus(f) && here.has(f[1]));
+  const rest = active.filter((f) => !isCampus(f));
   const q = state.q.trim().toLowerCase();
   const items = list
     .filter((x) => !campus.length || campus.some(([, , f]) => f(x)))
@@ -166,7 +183,7 @@ function linksRow(x) {
   const link = (how, href, text) =>
     `<a href="${esc(href)}" target="_blank" rel="noopener" data-how="${how}" data-title="${esc(x.title)}" data-building="${esc(x.building)}">${text}</a>`;
   const links = [
-    x.link && link("floorplan", x.link, "Floor plan"),
+    x.link && (x.uni === "uzh" ? link("info", x.link, "Info") : link("floorplan", x.link, "Floor plan")),
     x.coord && link("directions", `https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${x.coord}`, "Directions"),
   ].filter(Boolean);
   return `<div class="row"><span class="dist">${formatDistance(x.dist)}</span><span>${links.join(" · ")}</span></div>`;
@@ -196,7 +213,7 @@ function spaceCard(s) {
     <div class="side ${lvl}">
       ${s.pct == null
         ? `<div class="big unknown">—<small>no live data</small></div>`
-        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy ?? "?"} / ${s.max ?? "?"} people</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
+        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy != null ? `${s.occupancy} / ${s.max ?? "?"} people` : "approx."}</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
     </div>
     <div class="meter ${lvl}" role="img" aria-label="${s.pct == null ? "Occupancy unknown" : `${s.pct}% full`}"><i style="width:${s.pct ?? 0}%"></i></div>
     ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
@@ -241,7 +258,9 @@ function roomCard(r) {
 function render() {
   for (const b of document.querySelectorAll("[role=tab]")) b.setAttribute("aria-selected", b.dataset.tab === state.tab);
   $("#list").setAttribute("aria-labelledby", `tab-${state.tab}`);
-  $("#chips").innerHTML = FILTERS[state.tab].map(([k, label]) =>
+  for (const b of document.querySelectorAll("[data-uni]")) b.setAttribute("aria-pressed", b.dataset.uni === state.uni);
+  const here = campusesOf(mine());
+  $("#chips").innerHTML = FILTERS[state.tab].filter((f) => !isCampus(f) || here.has(f[1])).map(([k, label]) =>
     `<button class="chip" type="button" data-k="${k}" aria-pressed="${state.on[state.tab].includes(k)}">${k === "free" ? `Free ${isNow() ? "now" : "then"}` : label}</button>`).join("");
   $("#when").hidden = state.tab !== "rooms";
   $("#maplink").href = `map.html#${state.tab}`; // the map opens on the same tab
@@ -255,7 +274,7 @@ function render() {
   $("#list").setAttribute("aria-busy", "false");
   $("#updated").textContent = state.tab === "spaces"
     ? (state.updated ? `Live occupancy · updated ${hhmm(state.updated)}` : "Live occupancy")
-    : `Room bookings${state.roomsAt ? ` · checked ${stamp(state.roomsAt)}` : ""} · ${state.rooms.filter((r) => roomStatus(r.busy, when()).free).length} free ${whenLabel()}`;
+    : `Room bookings${state.roomsAt ? ` · checked ${stamp(state.roomsAt)}` : ""} · ${state.rooms.filter(ofUni).filter((r) => roomStatus(r.busy, when()).free).length} free ${whenLabel()}`;
 }
 
 function locate(on) {
@@ -292,6 +311,10 @@ function bind() {
     const t = e.target.closest("[data-tab]"); if (!t) return;
     if (state.tab !== t.dataset.tab) STATS.act(`tab_${t.dataset.tab}`);
     state.tab = t.dataset.tab; store.set("tab", state.tab); render();
+  });
+  $("#uni").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-uni]"); if (!b || b.dataset.uni === state.uni) return;
+    state.uni = b.dataset.uni; store.set("uni", state.uni); STATS.act(`uni_${state.uni}`); render();
   });
   $("#chips").addEventListener("click", (e) => {
     const c = e.target.closest("[data-k]"); if (!c) return;

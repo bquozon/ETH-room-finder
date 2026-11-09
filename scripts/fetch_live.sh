@@ -13,6 +13,10 @@ fetch studyspaces/availability.json availability.json || echo "availability fetc
 if [ ! -f "$DIR/spaces.json" ] || [ -n "$(find "$DIR/spaces.json" -mmin +60)" ]; then
   fetch studyspaces.json spaces.json || echo "spaces fetch failed" >&2
 fi
+# UZH's library sensors only report rounded numbers ("ca. 50%"): every 5 minutes is plenty.
+if [ ! -f "$DIR/uzh_spaces.json" ] || [ -n "$(find "$DIR/uzh_spaces.json" -mmin +4)" ]; then
+  python3 "$(dirname "$0")/fetch_uzh_live.py" || echo "UZH occupancy fetch failed" >&2
+fi
 # A one-off ETH hiccup is fine; only fail (and alert) once the live data is 15+ minutes old.
 if [ ! -f "$DIR/availability.json" ] || [ -n "$(find "$DIR/availability.json" -mmin +15)" ]; then
   echo "live data is stale" >&2

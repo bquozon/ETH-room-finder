@@ -1,12 +1,17 @@
 // node scripts/test_logic.mjs
 import assert from "node:assert/strict";
-import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule } from "../site/logic.js";
+import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule, uniOf, roomTitle } from "../site/logic.js";
 
 // HG -> CAB is ~220 m
 const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
 assert.ok(d > 200 && d < 240, `HG-CAB ${d}`);
 assert.equal(campusOf("HG"), "Zentrum");
 assert.equal(campusOf("HCI"), "Hönggerberg");
+assert.deepEqual(["KOL", "Y15", "TFA", "BIN", "AFL", "ZB", "BOT", "nope"].map(campusOf),
+  ["Zentrum", "Irchel", "Irchel", "Oerlikon", "Oerlikon", "Zentrum", "Zentrum", "Zentrum"]);
+assert.equal(uniOf("HG"), "eth"); assert.equal(uniOf("KOL"), "uzh");
+assert.equal(roomTitle({ building: "HG", floor: "E", room: "5" }), "HG E 5");
+assert.equal(roomTitle({ uni: "uzh", building: "KOL", floor: "F", room: "101" }), "KOL-F-101");
 assert.equal(formatDistance(220), "220 m · 4 min walk");
 
 const at = (h, m = 0) => new Date(2026, 10, 9, h, m); // Monday

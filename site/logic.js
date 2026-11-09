@@ -3,8 +3,27 @@
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 export const getJSON = (p) => fetch(p, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); });
 
-// Building centroids, taken from the Google Maps links on ethz.ch/en/utils/location.html.
+// UZH buildings with rooms or study spaces: UZH's own points (ziplaene-api.uzh.ch/v1/map/buildings); ZB from OSM.
+export const UZH_BUILDINGS = {
+  AFL: [47.410822, 8.540082], AND: [47.413167, 8.548717], BIM: [47.413811, 8.548754], BIN: [47.414532, 8.549137],
+  BOT: [47.358897, 8.560108], C1R: [47.375399, 8.553557], FRE: [47.371025, 8.554153], GLT: [47.374916, 8.553074],
+  HAH: [47.376102, 8.554057], KAB: [47.371471, 8.54857], KO2: [47.375194, 8.548007], KOH: [47.374271, 8.548243],
+  KOL: [47.374544, 8.548613], KUM: [47.37492, 8.546629], PLD: [47.37322, 8.553648], PLM: [47.374176, 8.552626],
+  RAA: [47.372056, 8.550049], RAI: [47.373305, 8.550802], RAK: [47.375321, 8.548866], SOC: [47.373999, 8.549605],
+  SOD: [47.373036, 8.549289], SOE: [47.37353, 8.549235], SOF: [47.372851, 8.549755], TFA: [47.400915, 8.55163],
+  Y03: [47.397245, 8.548948], Y04: [47.3972, 8.549348], Y10: [47.397854, 8.547568], Y13: [47.3976, 8.549122],
+  Y14: [47.397428, 8.549523], Y15: [47.397538, 8.549988], Y16: [47.397368, 8.550265], Y17: [47.397197, 8.550544],
+  Y21: [47.397138, 8.548216], Y22: [47.397126, 8.548607], Y23: [47.396749, 8.548742], Y24: [47.396781, 8.549234],
+  Y27: [47.396697, 8.550141], Y35: [47.397937, 8.550145], Y44: [47.396168, 8.548743], Y63: [47.3955, 8.549948],
+  ZB: [47.3742527, 8.5453412],
+};
+export const uniOf = (building) => (building in UZH_BUILDINGS ? "uzh" : "eth");
+// "HG E 5" at ETH, "KOL-F-101" at UZH: each the way its own university writes it
+export const roomTitle = (r) => [r.building, r.floor, r.room].join(r.uni === "uzh" ? "-" : " ");
+
+// ETH building centroids, taken from the Google Maps links on ethz.ch/en/utils/location.html.
 export const BUILDINGS = {
+  ...UZH_BUILDINGS,
   CAB: [47.37837, 8.548801], CHN: [47.379377, 8.548462], CLA: [47.377575, 8.546827],
   ETA: [47.377951, 8.553109], ETF: [47.377433, 8.552293], ETZ: [47.377666, 8.552768],
   GLC: [47.3775467, 8.5534081], HCI: [47.407528, 8.507715], HCP: [47.40629, 8.50745],
@@ -16,9 +35,10 @@ export const BUILDINGS = {
   ML: [47.377945, 8.547755], NO: [47.378439, 8.547159], RZ: [47.380412, 8.545091],
 };
 
+// North of the city centre: Hönggerberg (west), Oerlikon, Irchel (incl. the Tierspital).
 export const campusOf = (building) => {
-  const c = BUILDINGS[building];
-  return c && c[0] > 47.4 ? "Hönggerberg" : "Zentrum";
+  const [lat, lon] = BUILDINGS[building] ?? [0, 0];
+  return lat > 47.405 ? (lon < 8.52 ? "Hönggerberg" : "Oerlikon") : lat > 47.39 ? "Irchel" : "Zentrum";
 };
 
 // Haversine distance in metres.

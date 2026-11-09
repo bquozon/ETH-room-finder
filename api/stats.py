@@ -36,6 +36,10 @@ ACTIONS = {
     "time": "Picked a time",
     "directions": "Opened directions",
     "floorplan": "Opened a floor plan",
+    "info": "Opened a UZH library page",
+    "uni_eth": "Switched to ETH",
+    "uni_uzh": "Switched to UZH",
+    "uni_both": "Switched to ETH + UZH",
     "schedule": "Opened a room's schedule",
     "home_open": "Opened from home screen",
     "a2hs_no": "Closed the home-screen hint",
@@ -115,7 +119,7 @@ class Stats:
             elif kind == "click":  # directions or floor plan of one place
                 self._bump(day, "click", h.get("title", ""))
                 self._bump(day, "building", h.get("building", ""))
-                if h.get("how") in ("directions", "floorplan"):
+                if h.get("how") in ("directions", "floorplan", "info"):
                     self._bump(day, "action", ACTIONS[h["how"]])
             elif kind in ACTIONS:
                 self._bump(day, "action", ACTIONS[kind])

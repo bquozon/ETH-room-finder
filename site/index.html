@@ -25,7 +25,7 @@
   <header class="top">
     <div class="brand">
       <h1>ETH Room Finder</h1>
-      <p class="tagline">Study spaces &amp; free rooms at ETH Zurich</p>
+      <p class="tagline">Study spaces &amp; free rooms at ETH and UZH</p>
       <p class="updated" id="updated" aria-live="polite">Loading…</p>
     </div>
     <button class="locate" id="locate" type="button" aria-pressed="false">
@@ -45,6 +45,11 @@
   </div>
 
   <section class="controls">
+    <div class="seg" id="uni" role="group" aria-label="University">
+      <button type="button" data-uni="eth" aria-pressed="false">ETH</button>
+      <button type="button" data-uni="uzh" aria-pressed="false">UZH</button>
+      <button type="button" data-uni="both" aria-pressed="true">Both</button>
+    </div>
     <label class="search">
       <span class="visually-hidden">Search</span>
       <input id="q" type="search" placeholder="Search building, room, name…" autocomplete="off">
@@ -69,7 +74,8 @@
     Free-room data builds on <a href="https://github.com/ollie-sara/roominfo_checker">roominfo_checker</a>
     by Oliver Saravanja (<a href="https://github.com/ollie-sara">@ollie-sara</a>), the original
     <a href="https://rooms.saravanja.ch">Sick Room Finder</a>. Thank you!<br>
-    Data: ETH Zurich (study-space occupancy, room bookings). Unofficial, not affiliated with ETH.<br>
+    Data: ETH Zurich (study-space occupancy, room bookings), UZH (library occupancy, room bookings, building locations).
+    Unofficial, not affiliated with ETH or UZH.<br>
     <a href="https://github.com/bquozon/ETH-room-finder">Source code on GitHub</a> · <a href="https://polyuni.ch">Poly+Uni Agenda</a>: student events in Zurich
   </footer>
 </body>

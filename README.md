@@ -15,6 +15,8 @@ There's no backend. The site is plain static files, and two systemd timers on th
 |---|---|---|
 | Study-space list and live occupancy | `ethz.ch/bin/ethz/studyspaces.json`, `.../availability.json` | every minute |
 | Room bookings for the next 7 days | `ethz.ch/bin/ethz/roominfo` (centrally administered teaching rooms, plus `scripts/extra_rooms.txt`) | twice a day |
+| UZH library occupancy | the UB's live widgets (`hbzwwws04.ub.uzh.ch/occusense/...`, as on ub.uzh.ch's Belegungsanzeigen), plus the Zentralbibliothek without live data | every 5 minutes |
+| UZH room bookings for the next 7 days | UZH's public booking calendar (`uzh.book.3vrooms.app`, anonymous), teaching rooms only | twice a day |
 
 Visitors only ever load these copies, so ETH sees the same handful of requests whether 10 or 10,000 people use the site.
 
@@ -24,7 +26,7 @@ site/                 index.html, app.js (UI), logic.js (pure helpers + building
 site/vendor/          MapLibre GL JS 4.7.1, CSP build (BSD-3-Clause, licenses/)
 site/data/            generated JSON (git-ignored)
 api/                  visit statistics: stats.py (counting), server.py (/api/hit, /api/stats), Dockerfile
-scripts/              fetch_live.sh, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py
+scripts/              fetch_live.sh, fetch_uzh_live.py, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py, test_uzh.py
 deploy/install.sh     installs or updates everything on the VPS (safe to re-run)
 deploy/systemd/       timers: live data, room bookings; failure alert
 deploy/docker-web/    compose.yml and Caddyfile for the site and stats containers
@@ -39,6 +41,7 @@ Needs Python 3, curl and (for the tests) Node.
 python3 -m http.server 8765 -d site      # open http://localhost:8765
 npm test                                 # site logic (Node)
 python3 scripts/test_stats.py            # visit counting
+python3 scripts/test_uzh.py              # UZH parsers
 ```
 
 ## Deploy

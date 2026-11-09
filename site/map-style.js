@@ -2,14 +2,14 @@
 // on the horizon, a light and a dark version. Only the data comes from OpenFreeMap (OpenStreetMap vector
 // tiles, OpenMapTiles schema).
 // Keys: ground, campus (university land), grass, wood, water, road, roadEdge, rail, building, eth (ETH
-// buildings = the site's --accent), label, halo (text outline), transit (stop names), sky, tree, tree2 (round trees), pine (conifers), leaf (spherical broadleaf), trunk,
+// buildings = the site's --accent), uzh (UZH buildings: a lighter, greener blue, told apart from ETH at a glance), label, halo (text outline), transit (stop names), sky, tree, tree2 (round trees), pine (conifers), leaf (spherical broadleaf), trunk,
 // yellow/orange/red: autumn leaves, bare: winter branches, pink/rose: spring blossom, each [from, to] (each tree
 // gets its own shade in between), kept soft to suit the pale map;
 // autumn/winter/spring: keys that replace the normal (summer) ones in that season.
 const PALETTES = {
   // light buildings: a pale tint of the complement of the ETH blue (hue 38° vs 218°), so the blue stands out
   light: { ground: "#f6f7f8", campus: "#e9f2f3", grass: "#cbe6b8", wood: "#b8d9a8", water: "#b3d9f2", road: "#ffffff",
-    roadEdge: "#dfe3e8", rail: "#c8cdd4", building: "#faf6ef", eth: "#1f407a", label: "#6b7280", halo: "#ffffff",
+    roadEdge: "#dfe3e8", rail: "#c8cdd4", building: "#faf6ef", eth: "#1f407a", uzh: "#3a8fb7", label: "#6b7280", halo: "#ffffff",
     transit: "#1f407a", sky: "#e6eef5", place: "#9aa1ad", tree: "#9fcf8a", tree2: "#86bf73", pine: "#6aa26a", leaf: "#b2d68a", trunk: "#b09579",
     yellow: ["#e8cf7e", "#e6da9c"], orange: ["#e6974f", "#eeae6a"], red: ["#cf6d58", "#dc846c"],
     bare: ["#b9a998", "#cbbfb2"], pink: ["#f4bccb", "#f8cdd8"], rose: ["#e79ab3", "#eeaac0"],
@@ -19,7 +19,7 @@ const PALETTES = {
     // spring: fresh, bright young green
     spring: { grass: "#d4edbd", wood: "#bfe0a8", tree: "#b4dc8c", tree2: "#a2d27c", leaf: "#c6e39a" } },
   dark: { ground: "#14171d", campus: "#18212a", grass: "#1c3322", wood: "#22362a", water: "#1b3149", road: "#2a2f3a",
-    roadEdge: "#1f232c", rail: "#3a4150", building: "#2c313c", eth: "#7ea3e6", label: "#9aa1ad", halo: "#14171d",
+    roadEdge: "#1f232c", rail: "#3a4150", building: "#2c313c", eth: "#7ea3e6", uzh: "#4fb8d4", label: "#9aa1ad", halo: "#14171d",
     transit: "#7ea3e6", sky: "#0c0e13", place: "#646b78", tree: "#2f5039", tree2: "#284632", pine: "#223b2b", leaf: "#36583b", trunk: "#3a3129",
     yellow: ["#5f5532", "#5a5639"], orange: ["#6a4729", "#735131"], red: ["#5d2f28", "#673830"],
     bare: ["#3a352f", "#433d37"], pink: ["#6a4450", "#724c58"], rose: ["#5e3646", "#663d4d"],
@@ -111,7 +111,7 @@ const PAINT = [
   ["park", "fill-color", "grass"], ["pitch", "fill-color", "grass"], ["wood-ground", "fill-color", "wood"],
   ["water", "fill-color", "water"], ["river", "line-color", "water"], ["road-edge", "line-color", "roadEdge"],
   ["road", "line-color", "road"], ["path", "line-color", "road"], ["rail", "line-color", "rail"],
-  ["building-3d", "fill-extrusion-color", "building"], ["eth-others", "fill-extrusion-color", "building"], ["eth", "fill-extrusion-color", "eth"],
+  ["building-3d", "fill-extrusion-color", "building"], ["eth-others", "fill-extrusion-color", "building"], ["eth", "fill-extrusion-color", "eth"], ["uzh", "fill-extrusion-color", "uzh"],
   ["street-name", "text-color", "label"], ["street-name", "text-halo-color", "halo"],
   ["stops", "text-color", "transit"], ["stops", "text-halo-color", "halo"], ["place", "text-halo-color", "ground"], ["place", "text-color", "place"],
 ];
