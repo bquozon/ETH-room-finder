@@ -21,6 +21,9 @@ const middle = ([ring]) => ring.reduce(([x, y], [a, b]) => [x + a / ring.length,
 // "eth", "uzh" or undefined (a neighbour)
 const uniIn = (poly) => pointIn(poly) ?? [...outlines.values()].find(([o]) => inPoly(o, middle(poly)))?.[1];
 function collectEth() {
+  // Below z14 (or while z13 tiles still stand in) tiles merge whole blocks into one shape: an old-town block
+  // holding a UZH point would turn every house in it blue. Only read full-detail z14 tiles.
+  if (map.getZoom() < 14 || !map.isSourceLoaded("openmaptiles")) return;
   const fs = map.querySourceFeatures("openmaptiles", { sourceLayer: "building" });
   const n = pieces.size;
   for (const f of fs) for (const poly of polys(f.geometry)) { const u = pointIn(poly); if (u) outlines.set(JSON.stringify(poly[0][0]), [poly, u]); }
@@ -197,6 +200,8 @@ showPins();
 
 document.getElementById("campus").addEventListener("click", (e) => {
   if (e.target.closest("#tilt")) return setStyle(current === "3D" ? "Flat" : "3D");
-  const c = e.target.closest("[data-go]"); if (c) map.flyTo({ ...VIEWS[c.dataset.go], pitch: STYLES[current], bearing: STYLES[current] ? -25 : 0 });
+  // minZoom 14: the flight stays on the z14 tiles every campus view uses, instead of zooming out to a
+  // city's worth of z13 tiles that are still loading (white gaps, half-drawn buildings)
+  const c = e.target.closest("[data-go]"); if (c) map.flyTo({ ...VIEWS[c.dataset.go], minZoom: 14, pitch: STYLES[current], bearing: STYLES[current] ? -25 : 0 });
 });
 
