@@ -3,32 +3,34 @@
 // tiles, OpenMapTiles schema).
 // Keys: ground, campus (university land), grass, wood, water, road, roadEdge, rail, building, eth (ETH
 // buildings = the site's --accent), uzh (UZH buildings: a lighter, greener blue, told apart from ETH at a glance), label, halo (text outline), transit (stop names), sky, tree, tree2 (round trees), pine (conifers), leaf (spherical broadleaf), trunk,
+// snow (snow on trees), lamp (lanterns, Christmas lights), pole (lamp posts), bauble (red Christmas lights),
 // yellow/orange/red: autumn leaves, bare: winter branches, pink/rose: spring blossom, each [from, to] (each tree
 // gets its own shade in between), kept soft to suit the pale map;
-// autumn/winter/spring: keys that replace the normal (summer) ones in that season.
+// autumn/winter/spring: keys that replace the normal (summer) ones in that season. Winter is always the dark map (a night scene).
 const PALETTES = {
   // light buildings: a pale tint of the complement of the ETH blue (hue 38° vs 218°), so the blue stands out
   light: { ground: "#f6f7f8", campus: "#e9f2f3", grass: "#cbe6b8", wood: "#b8d9a8", water: "#b3d9f2", road: "#ffffff",
     roadEdge: "#dfe3e8", rail: "#c8cdd4", building: "#faf6ef", eth: "#1f407a", uzh: "#3a8fb7", label: "#6b7280", halo: "#ffffff",
     transit: "#1f407a", sky: "#e6eef5", place: "#9aa1ad", tree: "#9fcf8a", tree2: "#86bf73", pine: "#6aa26a", leaf: "#b2d68a", trunk: "#b09579",
+    snow: "#ffffff", lamp: "#f2b23c", bauble: "#d9433b", pole: "#4a525d",
     yellow: ["#e8cf7e", "#e6da9c"], orange: ["#e6974f", "#eeae6a"], red: ["#cf6d58", "#dc846c"],
     bare: ["#b9a998", "#cbbfb2"], pink: ["#f4bccb", "#f8cdd8"], rose: ["#e79ab3", "#eeaac0"],
     autumn: { grass: "#e9e5b6", wood: "#d6d197" },
-    // winter: frosty, faded grass; conifers a duller green
-    winter: { grass: "#e4e9e1", wood: "#d2dccf", pine: "#7f9f84" },
     // spring: fresh, bright young green
     spring: { grass: "#d4edbd", wood: "#bfe0a8", tree: "#b4dc8c", tree2: "#a2d27c", leaf: "#c6e39a" } },
   dark: { ground: "#14171d", campus: "#18212a", grass: "#1c3322", wood: "#22362a", water: "#1b3149", road: "#2a2f3a",
     roadEdge: "#1f232c", rail: "#3a4150", building: "#2c313c", eth: "#7ea3e6", uzh: "#4fb8d4", label: "#9aa1ad", halo: "#14171d",
     transit: "#7ea3e6", sky: "#0c0e13", place: "#646b78", tree: "#2f5039", tree2: "#284632", pine: "#223b2b", leaf: "#36583b", trunk: "#3a3129",
+    snow: "#cfd9e4", lamp: "#ffcf6e", bauble: "#ff6b5e", pole: "#5d6775",
     yellow: ["#5f5532", "#5a5639"], orange: ["#6a4729", "#735131"], red: ["#5d2f28", "#673830"],
     bare: ["#3a352f", "#433d37"], pink: ["#6a4450", "#724c58"], rose: ["#5e3646", "#663d4d"],
     autumn: { grass: "#2b2b1d", wood: "#323322" },
-    winter: { grass: "#20262a", wood: "#252d2e", pine: "#233a2d" },
+    // winter night: bluish snow, lighter than the cleared streets
+    winter: { ground: "#2e3640", campus: "#323a45", grass: "#3c4551", wood: "#36404b", pine: "#264232", road: "#171a20", roadEdge: "#12151a" },
     spring: { grass: "#1f3a22", wood: "#26402a", tree: "#3a603c", tree2: "#325634", leaf: "#436a45" } },
 };
 export const systemPalette = () => {
-  const P = PALETTES[matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"];
+  const P = PALETTES[season() === "winter" || matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"];
   return { ...P, ...P[season()] }; // summer has no overrides
 };
 const FONT = ["Noto Sans Regular"], BOLD = ["Noto Sans Bold"];
@@ -43,6 +45,7 @@ export const campusStyle = (C = systemPalette()) => ({
   sources: {
     openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
     trees: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+    glows: { type: "geojson", data: { type: "FeatureCollection", features: [] } }, // winter: one point under each lamp post
   },
   glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   light: { anchor: "viewport", position: [1.4, 200, 35], color: "#fffaf0", intensity: 0.35 }, // soft afternoon sun
@@ -78,6 +81,11 @@ export const campusStyle = (C = systemPalette()) => ({
     { id: "rail", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: cls("rail", "transit"),
       paint: { "line-color": C.rail, "line-width": zw([[13, 1], [19, 3]]) } },
 
+    // winter: a soft pool of lamplight on the snow under each lamp post; a heatmap, for its gaussian falloff
+    // (winter is always the dark palette, so the lamp colour is written out here)
+    ...(season() === "winter" ? [{ id: "lamp-glow", type: "heatmap", source: "glows", minzoom: 14.5,
+      paint: { "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 15, 8, 19, 120], "heatmap-intensity": 2.5,
+        "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(255,207,110,0)", 1, "rgba(255,207,110,0.85)"] } }] : []),
     { id: "building-3d", type: "fill-extrusion", source: "openmaptiles", "source-layer": "building", minzoom: 13,
       filter: ["!", ["has", "hide_3d"]],
       paint: { "fill-extrusion-color": C.building, "fill-extrusion-height": ["get", "render_height"],
@@ -122,10 +130,11 @@ export function applyPalette(map, C) {
 }
 // Seasonal crowns carry g (colour group) and v (shade within it); everything else is coloured by kind (t).
 // g: 0 yellow, 1 orange, 2 red (autumn), 3 bare (winter), 4 pink, 5 rose (spring blossom)
+// t: 0 round, 1 round2, 2 trunk, 3 pine, 4 sphere, 5 snow, 6 lamp, 7 bauble, 8 pole
 const shade = ([a, b]) => ["interpolate", ["linear"], ["get", "v"], 0, a, 1, b];
 const treeColour = (C) => ["case", ["has", "g"], ["match", ["get", "g"], 0, shade(C.yellow), 1, shade(C.orange), 2, shade(C.red),
     3, shade(C.bare), 4, shade(C.pink), shade(C.rose)],
-  ["match", ["get", "t"], 0, C.tree, 1, C.tree2, 3, C.pine, 4, C.leaf, C.trunk]];
+  ["match", ["get", "t"], 0, C.tree, 1, C.tree2, 3, C.pine, 4, C.leaf, 5, C.snow, 6, C.lamp, 7, C.bauble, 8, C.pole, C.trunk]];
 
 // ---- seasons, from today's date (?season=winter|spring|summer|autumn in the URL to preview one)
 // spring 1 Mar - 31 May, summer 1 Jun - 21 Sep, autumn 22 Sep - 30 Nov, winter 1 Dec - end of Feb
@@ -208,10 +217,56 @@ function springLeaves(p, i, j) {
   if (n < 0.68 && hash(i - 13, j + 29) > 0.06) return undefined;
   return { g: hash(i + 31, j - 17) < 0.6 ? 4 : 5, v: hash(i + 3, j + 41) };
 }
+// Winter: a thin layer of snow on top of every crown tier. Under a wider tier it stays hidden, so it only shows
+// where a tier steps in (pine tiers, the round crowns, the top half of a ball).
+const snowed = (parts) => [...parts, ...parts.filter((f) => f.properties.t !== 2)
+  .map((f) => ({ ...f, properties: { t: 5, b: f.properties.h, h: f.properties.h + 0.35 } }))];
+// Winter: a few park conifers become Tannenbaums, a bigger snowy pine hung with lights and a star.
+const disc = (q, r, b, h, t) => ({ type: "Feature", properties: { t, b, h }, geometry: { type: "Polygon", coordinates: circle(q, r) } });
+function tannenbaum(p, s) {
+  const tiers = tree(p, s, "pine", 0), dot = disc;
+  // per tier: two rows of small lights, and round red baubles hanging from its lower rim
+  const at = (r, a) => [p[0] + (r * Math.cos(a)) / (M * K), p[1] + (r * Math.sin(a)) / M];
+  const lights = tiers.slice(1).flatMap((f, k) => {
+    const r = (f.geometry.coordinates[0][0][0] - p[0]) * M * K, { b, h } = f.properties; // the tier's radius, back from its outline
+    const n = Math.round(r * 5), m = Math.max(2, Math.round(r * 1.5));
+    const row = (z, turn) => Array.from({ length: n }, (_, i) => dot(at(r, (2 * Math.PI * i) / n + turn), 0.18, z, z + 0.3, 6));
+    const baubles = Array.from({ length: m }, (_, i) => ball(at(r + 0.15, (2 * Math.PI * (i + 0.5)) / m + k), 0.5, b - 0.3, 7, 4, 0));
+    return [...row(b + 0.25 * (h - b), k), ...row(b + 0.7 * (h - b), k + Math.PI / n), ...baubles.flat()];
+  });
+  const top = tiers.at(-1).properties.h;
+  return [...snowed(tiers), ...lights, dot(p, 0.6, top, top + 1.2, 6)];
+}
+// Winter: a lamp post every 35 m along the streets, beside the road: a dark pole, a lit lantern, snow on top.
+// Spots are measured from each tile's piece of the street, so they stay put; a 6 m grid drops doubles at tile edges.
+function lampPosts(map, seen, out, glows) {
+  const v = map.getBounds();
+  for (const f of map.querySourceFeatures("openmaptiles", { sourceLayer: "transportation" })) {
+    if (!["primary", "secondary", "tertiary", "minor"].includes(f.properties.class)) continue;
+    // metres from the middle of the street, on its right: a divided road's two halves then light its two outer edges
+    const side = f.properties.class === "minor" ? 4 : 8;
+    const lines = f.geometry.type === "LineString" ? [f.geometry.coordinates] : f.geometry.type === "MultiLineString" ? f.geometry.coordinates : [];
+    for (const line of lines) {
+      let done = 0, next = 17;
+      for (let k = 1; k < line.length; k++) {
+        const [ax, ay] = [line[k - 1][0] * M * K, line[k - 1][1] * M], dx = line[k][0] * M * K - ax, dy = line[k][1] * M - ay, L = Math.hypot(dx, dy);
+        for (; next <= done + L; next += 35) {
+          const u = (next - done) / L, x = ax + u * dx + (dy / L) * side, y = ay + u * dy - (dx / L) * side, q = [x / (M * K), y / M];
+          const key = `lamp:${Math.round(x / 6)}:${Math.round(y / 6)}`;
+          if (seen.has(key) || !v.contains(q)) continue;
+          seen.add(key);
+          glows.push({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: q } });
+          out.push(disc(q, 0.18, 0, 5, 8), disc(q, 0.45, 5, 5.7, 6), disc(q, 0.5, 5.7, 5.85, 8), disc(q, 0.45, 5.85, 6.05, 5));
+        }
+        done += L;
+      }
+    }
+  }
+}
 const LEAVES = { autumn: autumnLeaves, spring: springLeaves, winter: (p, i, j) => ({ g: 3, v: hash(i + 3, j + 41) }) };
 
 export function plantTrees(map) {
-  const leavesOf = LEAVES[season()]; // undefined in summer: all green
+  const leavesOf = LEAVES[season()], winter = season() === "winter"; // undefined in summer: all green
   const plant = () => {
     if (map.getZoom() < 14.5) return;
     // far out: only half the trees, always the same half, so zooming in only adds trees, never moves them
@@ -245,12 +300,21 @@ export function plantTrees(map) {
             const leaves = leavesOf && kind !== "pine" ? leavesOf(p, i, j) : undefined; // conifers stay green
             // size: its own random draw, 0.6x to 1.7x, mostly small and medium with the odd big one
             const size = 0.6 + 1.1 * hash(i + 19, j + 23) ** 1.6;
-            out.push(...tree(p, size, kind, 2 * Math.PI * hash(j + 11, i + 5), leaves));
+            // shortcut: a chance per park conifer, so most parks get one or two and a big park more; count per park if that is too many
+            if (winter && !wood && kind === "pine" && hash(i + 53, j - 71) < 0.12) { out.push(...tannenbaum(p, 1.2 + 0.4 * size)); continue; }
+            const parts = tree(p, size, kind, 2 * Math.PI * hash(j + 11, i + 5), leaves);
+            out.push(...(winter ? snowed(parts) : parts));
           }
       }
     }
+    const glows = [];
+    if (winter) lampPosts(map, seen, out, glows);
     const sig = [...seen].join();
-    if (sig !== last) { last = sig; map.getSource("trees")?.setData({ type: "FeatureCollection", features: out }); }
+    if (sig !== last) {
+      last = sig;
+      map.getSource("trees")?.setData({ type: "FeatureCollection", features: out });
+      map.getSource("glows")?.setData({ type: "FeatureCollection", features: glows });
+    }
   };
   let last = "";
   // The signature check stops setData -> render -> idle from looping.
