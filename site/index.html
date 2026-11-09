@@ -45,15 +45,17 @@
   </div>
 
   <section class="controls">
-    <div class="seg" id="uni" role="group" aria-label="University">
-      <button type="button" data-uni="eth" aria-pressed="false">ETH</button>
-      <button type="button" data-uni="uzh" aria-pressed="false">UZH</button>
-      <button type="button" data-uni="both" aria-pressed="true">Both</button>
+    <div class="bar">
+      <label class="search">
+        <span class="visually-hidden">Search</span>
+        <input id="q" type="search" placeholder="Search…" autocomplete="off">
+      </label>
+      <div class="seg" id="uni" role="group" aria-label="University">
+        <button type="button" data-uni="eth" aria-pressed="false">ETH</button>
+        <button type="button" data-uni="uzh" aria-pressed="false">UZH</button>
+        <button type="button" data-uni="both" aria-pressed="true">Both</button>
+      </div>
     </div>
-    <label class="search">
-      <span class="visually-hidden">Search</span>
-      <input id="q" type="search" placeholder="Search building, room, name…" autocomplete="off">
-    </label>
     <div class="when" id="when" hidden>
       <label><span class="visually-hidden">Day</span><select id="day"></select></label>
       <label><span class="visually-hidden">Time</span><select id="time"></select></label>

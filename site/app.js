@@ -212,10 +212,10 @@ function spaceCard(s) {
     </div>
     <div class="side ${lvl}">
       ${s.pct == null
-        ? `<div class="big unknown">—<small>no live data</small></div>`
+        ? `<div class="big unknown">?<small>unknown how busy</small></div>`
         : `<div class="big">${s.pct}%${trend}<small>${s.occupancy != null ? `${s.occupancy} / ${s.max ?? "?"} people` : "approx."}</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
     </div>
-    <div class="meter ${lvl}" role="img" aria-label="${s.pct == null ? "Occupancy unknown" : `${s.pct}% full`}"><i style="width:${s.pct ?? 0}%"></i></div>
+    ${s.pct == null ? "" : `<div class="meter ${lvl}" role="img" aria-label="${s.pct}% full"><i style="width:${s.pct}%"></i></div>`}
     ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
     ${linksRow(s)}
   </article>`;
