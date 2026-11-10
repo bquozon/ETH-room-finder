@@ -183,7 +183,7 @@ map.on("move", queueDeclutter);
 
 const bar = document.getElementById("styles");
 bar.innerHTML = `<a href="./" class="back" aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
-  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Study spaces</button><button data-mode="rooms">Free rooms</button></div>
+  <div class="seg" role="group" aria-label="Show"><button data-mode="spaces">Libraries &amp; lounges</button><button data-mode="rooms">Empty classrooms</button></div>
   <div class="seg" role="group" aria-label="University"><button data-uni="eth">ETH</button><button data-uni="uzh">UZH</button><button data-uni="both">Both</button></div>`;
 bar.addEventListener("click", (e) => {
   const u = e.target.closest("[data-uni]");

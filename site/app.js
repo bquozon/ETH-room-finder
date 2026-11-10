@@ -113,7 +113,7 @@ async function loadSpaces() {
     const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
     const features = a.features || [];
     return {
-      uni: "eth", title: a.title, description: a.description, building: a.building,
+      kind: "space", uni: "eth", title: a.title, description: a.description, building: a.building,
       campus: campusOf(a.building), coord: BUILDINGS[a.building], seats: a.seats,
       link: a.locationPageUrl && ETH + a.locationPageUrl, img: a.image && ETH + a.image,
       has24h: !!a.has24HourAccess, hours: a.hours || [],
@@ -122,7 +122,7 @@ async function loadSpaces() {
       updated: ok && l.timestamp ? new Date(l.timestamp) : null,
     };
   }).concat(uzh.spaces.map((u) => ({
-    ...u, uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
+    ...u, kind: "space", uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
     max: u.seats, updated: u.pct != null ? uzhAt : null,
   })));
   const times = state.spaces.map((s) => s.updated).filter(Boolean);
@@ -133,7 +133,7 @@ async function loadRooms() {
   const data = await getJSON("data/rooms.json");
   state.roomsAt = data.generated ? new Date(data.generated) : null;
   state.rooms = data.rooms.map((r) => ({
-    ...r, uni: r.uni || "eth", title: roomTitle(r), campus: campusOf(r.building), coord: BUILDINGS[r.building],
+    ...r, kind: "room", uni: r.uni || "eth", title: roomTitle(r), campus: campusOf(r.building), coord: BUILDINGS[r.building],
     seats: Number(r.seats) || 0,
     link: r.uni !== "uzh" && `${ETH}/en/utils/location.html?${new URLSearchParams({ building: r.building, floor: r.floor, room: r.room })}`,
   }));
@@ -147,22 +147,31 @@ const campusesOf = (xs) => new Set(xs.map((x) => x.campus));
 // UZH's sensors only say open (a count) or closed; the Zentralbibliothek has hours instead.
 const spaceOpen = (s, now) => s.closed ? { open: false } : s.uni === "uzh" && s.pct != null ? { open: true } : openingStatus(s.hours, s.has24h, now);
 
-// Spaces/rooms with distance attached, filtered and sorted for display.
-function visible() {
-  const now = new Date(), at = when(), xs = mine(), here = campusesOf(xs);
-  const list = state.tab === "spaces"
-    ? xs.map((s) => ({ ...s, open: spaceOpen(s, now) }))
-    : xs.map((r) => ({ ...r, status: roomStatus(r.busy, at) }));
-  const active = FILTERS[state.tab].filter(([k]) => state.on[state.tab].includes(k));
-  // Campus chips are alternatives (OR); the rest narrow down (AND). A chip hidden by the uni switch doesn't count.
-  const campus = active.filter((f) => isCampus(f) && here.has(f[1]));
-  const rest = active.filter((f) => !isCampus(f));
+// A space this full, or closed, doesn't count as a place to sit.
+const FULL = 90;
+// Somewhere you can sit right now (for rooms: at the chosen time).
+const usable = (x) => x.kind === "room" ? x.status.free : x.open.open !== false && !(x.pct >= FULL);
+
+// One tab's places at the chosen university, with open/free status, narrowed by the current tab's
+// campus chips and the search (both apply to either kind). Other chips are per kind and left out.
+function candidates(tab) {
+  const now = new Date(), at = when(), here = campusesOf(mine());
+  const campus = FILTERS[state.tab].filter((f) => isCampus(f) && here.has(f[1]) && state.on[state.tab].includes(f[0]));
   const q = state.q.trim().toLowerCase();
-  const items = list
+  return (tab === "spaces" ? state.spaces : state.rooms).filter(ofUni)
+    .map((x) => tab === "spaces" ? { ...x, open: spaceOpen(x, now) } : { ...x, status: roomStatus(x.busy, at) })
+    // Campus chips are alternatives (OR); a chip hidden by the uni switch doesn't count.
     .filter((x) => !campus.length || campus.some(([, , f]) => f(x)))
-    .filter((x) => rest.every(([, , f]) => f(x)))
     .filter((x) => !q || [x.title, x.description, x.building].some((s) => s && s.toLowerCase().includes(q)))
     .map((x) => ({ ...x, dist: state.pos && x.coord ? distance(state.pos, x.coord) : null }));
+}
+
+// Spaces/rooms with distance attached, filtered and sorted for display.
+function visible() {
+  const at = when();
+  // The other chips narrow down (AND).
+  const rest = FILTERS[state.tab].filter((f) => !isCampus(f) && state.on[state.tab].includes(f[0]));
+  const items = candidates(state.tab).filter((x) => rest.every(([, , f]) => f(x)));
 
   const byDist = (a, b) => (a.dist ?? 1e9) - (b.dist ?? 1e9);
   if (state.tab === "spaces") {
@@ -174,7 +183,33 @@ function visible() {
     const freeMins = (r) => (r.status.free ? (r.status.until - at) / 6e4 : -1);
     items.sort((a, b) => (b.status.free - a.status.free) || (state.pos ? byDist(a, b) : freeMins(b) - freeMins(a)));
   }
-  return items;
+  if (!state.pos || !isNow()) return items;
+
+  // Near me: each building also shows up to 2 places of the other kind you can sit in now, after this tab's own.
+  const other = state.tab === "spaces" ? "rooms" : "spaces", per = new Map();
+  const extra = candidates(other).filter((x) => x.coord && usable(x))
+    .sort(other === "rooms" ? (a, b) => b.status.until - a.status.until : placeOrder)
+    .filter((x) => { const n = per.get(x.building) || 0; per.set(x.building, n + 1); return n < 2; });
+  const last = (x) => x.kind === "space" ? x.open.open === false : !x.status.free; // this tab's unusable ones stay at the end
+  // Inside a building, alternate: own #1, other #1, own #2, other #2, then the rest of its own (stable sort keeps their order).
+  const slot = new Map(), seen = new Map();
+  for (const [x, odd] of [...items.map((x) => [x, 0]), ...extra.map((x) => [x, 1])]) {
+    const k = `${x.building}|${odd}`, i = seen.get(k) || 0;
+    seen.set(k, i + 1); slot.set(x, i < 2 ? 2 * i + odd : 9);
+  }
+  return [...items, ...extra].sort((a, b) => last(a) - last(b) || byDist(a, b) || slot.get(a) - slot.get(b));
+}
+
+// Nothing usable in the list: point to the other tab, if it has something now.
+function hint(items) {
+  if (!isNow() || items.some(usable)) return "";
+  const goto = state.tab === "spaces" ? "rooms" : "spaces";
+  const n = candidates(goto).filter(usable).length;
+  if (!n) return "";
+  const text = goto === "rooms"
+    ? `Libraries and lounges here are full or closed. ${n} classroom${n > 1 ? "s are" : " is"} free now`
+    : `No classroom is free here. ${n} librar${n > 1 ? "ies and lounges have" : "y or lounge has"} room now`;
+  return `<p class="hint"><button type="button" data-goto="${goto}">${text} →</button></p>`;
 }
 
 // Distance, then floor plan and walking directions (data-how: counted by the stats).
@@ -264,12 +299,12 @@ function render() {
   $("#when").hidden = state.tab !== "rooms";
   $("#maplink").href = `map.html#${state.tab}`; // the map opens on the same tab
   const items = visible();
-  $("#list").innerHTML = items.length
-    ? items.map(state.tab === "spaces" ? spaceCard : roomCard).join("")
-      + (state.tab === "rooms" ? `<p class="note">“Free” means no class is booked, not that the room is empty.</p>` : "")
+  $("#list").innerHTML = hint(items) + (items.length
+    ? items.map((x) => x.kind === "room" ? roomCard(x) : spaceCard(x)).join("")
+      + (items.some((x) => x.kind === "room") ? `<p class="note">“Free” means no class is booked, not that the room is empty.</p>` : "")
     : `<p class="empty">${state.tab === "rooms" && state.on.rooms.includes("free")
       ? `No teaching room is free ${whenLabel()}. They're closed on weekends and evenings.<br>Pick another day or time, or turn off “Free”.`
-      : "Nothing matches. Try removing a filter."}</p>`;
+      : "Nothing matches. Try removing a filter."}</p>`);
   $("#list").setAttribute("aria-busy", "false");
   $("#updated").textContent = state.tab === "spaces"
     ? (state.updated ? `Live occupancy · updated ${hhmm(state.updated)}` : "Live occupancy")
@@ -306,10 +341,11 @@ function locate(on) {
 }
 
 function bind() {
+  const showTab = (tab) => { state.tab = tab; store.set("tab", tab); render(); };
   $(".tabs").addEventListener("click", (e) => {
     const t = e.target.closest("[data-tab]"); if (!t) return;
     if (state.tab !== t.dataset.tab) STATS.act(`tab_${t.dataset.tab}`);
-    state.tab = t.dataset.tab; store.set("tab", state.tab); render();
+    showTab(t.dataset.tab);
   });
   $("#uni").addEventListener("click", (e) => {
     const b = e.target.closest("[data-uni]"); if (!b || b.dataset.uni === state.uni) return;
@@ -341,6 +377,8 @@ function bind() {
   $("#list").addEventListener("click", (e) => {
     const a = e.target.closest("a[data-how]");
     if (a) return STATS.click(a.dataset.how, a.dataset.title, a.dataset.building);
+    const go = e.target.closest("[data-goto]");
+    if (go) { STATS.act(`hint_${go.dataset.goto}`); showTab(go.dataset.goto); return scrollTo(0, 0); }
     // The whole room card opens its day schedule (the title button is the keyboard way in).
     const card = e.target.closest(".card[data-room]");
     if (!card || e.target.closest("a") || getSelection().toString()) return;
