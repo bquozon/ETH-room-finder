@@ -2,7 +2,7 @@
 
 Unofficial ETH Zurich room finder. It shows how full the student study spaces are right now, which lecture and seminar rooms are free (today or any day this week), and sorts everything by walking distance from you.
 
-- **Study spaces**: live occupancy, opening hours (including 24/7 access with an ETH card), sockets, noise level, food nearby.
+- **Study spaces**: live occupancy, a forecast of how busy each one usually is (tap a space, pick any weekday), opening hours (including 24/7 access with an ETH card), sockets, noise level, food nearby.
 - **Free rooms**: "free until 14:15" or "busy, free from 13:00", with a bar of the day's bookings (tap a room for the full schedule) and a warning when a room gets booked soon after you'd arrive. Pick any day and time in the next week. Free means unbooked, not necessarily empty.
 - **Map** (`map.html`): a 3D map of the campus with a pin per building (live occupancy or free rooms), ETH buildings in ETH blue, light/dark following the system, and trees that follow the seasons (`?season=winter|spring|summer|autumn` to preview). Map data © OpenStreetMap contributors, tiles from [OpenFreeMap](https://openfreemap.org).
 - **Near me**: uses your browser's location. Distances are computed on your device, and your location never reaches the server.
@@ -16,6 +16,7 @@ There's no backend. The site is plain static files, and two systemd timers on th
 | Study-space list and live occupancy | `ethz.ch/bin/ethz/studyspaces.json`, `.../availability.json` | every minute |
 | Room bookings for the next 7 days | `ethz.ch/bin/ethz/roominfo` (centrally administered teaching rooms, plus `scripts/extra_rooms.txt`) | twice a day |
 | UZH library occupancy | the UB's live widgets (`hbzwwws04.ub.uzh.ch/occusense/...`, as on ub.uzh.ch's Belegungsanzeigen), plus the Zentralbibliothek without live data | every 5 minutes |
+| Occupancy history and forecast (`forecast.json`) | samples of the two files above, kept in `site/data/.history/` (not served) | every 10 minutes |
 | UZH room bookings for the next 7 days | UZH's public booking calendar (`uzh.book.3vrooms.app`, anonymous), teaching rooms only | twice a day |
 
 Visitors only ever load these copies, so ETH sees the same handful of requests whether 10 or 10,000 people use the site.
@@ -26,7 +27,7 @@ site/                 index.html, app.js (UI), logic.js (pure helpers + building
 site/vendor/          MapLibre GL JS 4.7.1, CSP build (BSD-3-Clause, licenses/)
 site/data/            generated JSON (git-ignored)
 api/                  visit statistics: stats.py (counting), server.py (/api/hit, /api/stats), Dockerfile
-scripts/              fetch_live.sh, fetch_uzh_live.py, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py, test_uzh.py
+scripts/              fetch_live.sh, fetch_uzh_live.py, forecast.py, special_days.txt, scrape_rooms.py, extra_rooms.txt, update.sh, test_logic.mjs, test_stats.py, test_uzh.py, test_forecast.py
 deploy/install.sh     installs or updates everything on the VPS (safe to re-run)
 deploy/systemd/       timers: live data, room bookings; failure alert
 deploy/docker-web/    compose.yml and Caddyfile for the site and stats containers
@@ -42,6 +43,7 @@ python3 -m http.server 8765 -d site      # open http://localhost:8765
 npm test                                 # site logic (Node)
 python3 scripts/test_stats.py            # visit counting
 python3 scripts/test_uzh.py              # UZH parsers
+python3 scripts/test_forecast.py         # occupancy forecast
 ```
 
 ## Deploy
@@ -119,6 +121,7 @@ The same anonymous statistics as Poly+Uni Agenda (`api/stats.py` is ported from 
 
 - **A room is missing** (e.g. a department room like `CAB H 56`): add it to `scripts/extra_rooms.txt` as `BUILDING FLOOR ROOM`.
 - **A building has no distance:** add its coordinates to `BUILDINGS` in `site/logic.js`. Take them from the Google Maps link on `https://ethz.ch/en/utils/location.html?building=XYZ&floor=..&room=..`.
+- **Forecast:** each weekday and half hour is a weighted average of past days, last week counting double the week before. Until a space has 3 past Mondays, Mondays are predicted from all recent weekdays. Holidays and breaks in `scripts/special_days.txt` are left out: add next semester's dates from ETH's academic calendar.
 - **Opening hours look wrong:** they're parsed from ETH's text (`openingStatus` in `site/logic.js`), because ETH's own `isOpen` flag is unreliable. Add a case to `scripts/test_logic.mjs` when you fix one.
 
 ## Credits

@@ -1,0 +1,11 @@
+# Days left out of the occupancy forecast (scripts/forecast.py): holidays and breaks that would skew a normal week.
+# One per line: "YYYY-MM-DD [YYYY-MM-DD] note" (a single day or a range). Check against ETH's academic calendar
+# (ethz.ch/en/studies/academic-calendar.html) each semester.
+2026-12-24 2027-01-03  ETH closed over Christmas and New Year
+2027-03-26 2027-04-04  Easter break (Good Friday to Sunday after Easter Monday)
+2027-04-19  Sechseläuten (afternoon off)
+2027-05-06 2027-05-07  Ascension and bridge day
+2027-05-17  Whit Monday
+2027-08-01  Swiss National Day
+2027-09-13  Knabenschiessen Monday
+2027-12-24 2028-01-02  ETH closed over Christmas and New Year

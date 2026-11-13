@@ -81,6 +81,8 @@ const state = {
   time: "now",     // free rooms: "now" or "HH:MM"
   spaces: [], rooms: [], updated: null, roomsAt: null,
   opened: new Set(), // free rooms: titles whose full day schedule is shown
+  openSpaces: new Set(), // study spaces: titles whose details and forecast are shown
+  fday: new Map(),       // study spaces: title → weekday shown in the forecast (0 = Mon), default today
 };
 
 // The moment the free-rooms tab looks at.
@@ -104,8 +106,10 @@ const stamp = (d) => d.toDateString() === new Date().toDateString() ? hhmm(d) : 
 
 // Spaces and rooms share one shape: title, building, campus, coord, seats, link (floor plan).
 async function loadSpaces() {
-  const [spaces, avail, uzh] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json"),
-    getJSON("data/uzh_spaces.json").catch(() => ({ spaces: [] }))]); // UZH missing: ETH still works
+  const [spaces, avail, uzh, fc] = await Promise.all([getJSON("data/spaces.json"), getJSON("data/availability.json"),
+    getJSON("data/uzh_spaces.json").catch(() => ({ spaces: [] })), // UZH missing: ETH still works
+    getJSON("data/forecast.json").catch(() => ({ spaces: {} }))]); // see scripts/forecast.py
+  state.slot = fc.slot || 30;
   const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
   const uzhAt = uzh.generated && new Date(uzh.generated);
   state.spaces = spaces.data.map(({ attributes: a }) => {
@@ -113,7 +117,7 @@ async function loadSpaces() {
     const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
     const features = a.features || [];
     return {
-      kind: "space", uni: "eth", title: a.title, description: a.description, building: a.building,
+      kind: "space", uni: "eth", title: a.title, fc: fc.spaces[a.roomGlobalIdentifier], description: a.description, building: a.building,
       campus: campusOf(a.building), coord: BUILDINGS[a.building], seats: a.seats,
       link: a.locationPageUrl && ETH + a.locationPageUrl, img: a.image && ETH + a.image,
       has24h: !!a.has24HourAccess, hours: a.hours || [],
@@ -123,7 +127,7 @@ async function loadSpaces() {
     };
   }).concat(uzh.spaces.map((u) => ({
     ...u, kind: "space", uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
-    max: u.seats, updated: u.pct != null ? uzhAt : null,
+    max: u.seats, updated: u.pct != null ? uzhAt : null, fc: fc.spaces[`uzh:${u.title}`],
   })));
   const times = state.spaces.map((s) => s.updated).filter(Boolean);
   state.updated = times.length ? new Date(Math.max(...times)) : null;
@@ -233,14 +237,55 @@ function hoursLine(s) {
   return [badge, main, withoutCard, mensa].filter(Boolean).join(" · ");
 }
 
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const todayWd = () => (new Date().getDay() + 6) % 7;
+
+// Predicted occupancy over one weekday (scripts/forecast.py), as bars per half hour; today also lists the next hours.
+function forecast(s) {
+  const f = s.fc, wd = state.fday.get(s.title) ?? todayWd();
+  const chips = WEEKDAYS.map((d, i) => `<button type="button" class="chip" data-fday="${i}" aria-pressed="${i === wd}">${d.slice(0, 3)}</button>`).join("");
+  const head = `<h3>Usually how busy</h3><div class="fc-days">${chips}</div>`;
+  if (!f) return `<div class="fc">${head}<p class="sub">No forecast yet: it starts after a day of measurements.</p></div>`;
+  const vals = f.days[wd], have = vals.flatMap((v, i) => (v == null ? [] : [i]));
+  if (!have.length) return `<div class="fc">${head}<p class="sub">No measurements on a ${WEEKDAYS[wd]} yet (or it's closed then).</p></div>`;
+  const at = (i) => { const m = i * state.slot; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+  const first = have[0], last = have[have.length - 1] + 1, now = new Date();
+  const nowSlot = wd === todayWd() ? Math.floor((now.getHours() * 60 + now.getMinutes()) / state.slot) : -1;
+  const bars = vals.slice(first, last).map((v, k) => {
+    const i = first + k;
+    return `<i class="${occupancyLevel(v)}${i < nowSlot ? " past" : ""}${i === nowSlot ? " now" : ""}" style="height:${Math.max(v ?? 0, 2)}%" title="${at(i)}: ${v == null ? "no data" : `${v}%`}"></i>`;
+  }).join("");
+  const ticks = Array.from({ length: 5 }, (_, k) => `<span>${at(Math.round(first + ((last - first) * k) / 4))}</span>`).join("");
+  const perHour = 60 / state.slot, next = nowSlot < 0 ? [] : [1, 2, 3, 4].map((h) => nowSlot + h * perHour).filter((i) => vals[i] != null);
+  const n = f.n[wd], weekend = wd >= 5;
+  const basis = f.basis[wd] === "weekday"
+    ? `Average of the last ${n} ${WEEKDAYS[wd]}s, recent weeks counting most.`
+    : `Average of the last ${n} ${weekend ? "weekend days" : "weekdays"}, recent days counting most (not enough ${WEEKDAYS[wd]}s yet).`;
+  return `<div class="fc">${head}
+    ${next.length ? `<p class="sub">Next hours: ${next.map((i) => `${at(i)} <b class="${occupancyLevel(vals[i])}">${vals[i]}%</b>`).join(" · ")}</p>` : ""}
+    <div class="fc-bars" role="img" aria-label="Predicted occupancy on ${WEEKDAYS[wd]}s from ${at(first)} to ${at(last)}">${bars}</div>
+    <div class="ticks">${ticks}</div>
+    <p class="sub">${basis} Holidays left out.</p>
+  </div>`;
+}
+
+function spaceDetails(s, id) {
+  return `<div class="more" id="${id}">
+    ${s.hours.length ? `<p class="sub">${s.hours.map(esc).join("<br>")}</p>` : ""}
+    ${s.features.length ? `<div class="feats">${s.features.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
+    ${s.pct != null || s.fc ? forecast(s) : ""}
+  </div>`;
+}
+
 function spaceCard(s) {
   const lvl = occupancyLevel(s.pct);
   const trend = s.trend?.startsWith("incr") ? " ↑" : s.trend?.startsWith("decr") ? " ↓" : "";
   const feats = s.features.filter((f) => ["aus.stromviel", "um.ruhig", "um.laut", "food.mensa", "food.cafeteria", "work.gruppe", "aus.fenster"].includes(f.key));
-  return `<article class="card ${s.img ? "has-img" : ""}">
+  const open = state.openSpaces.has(s.title), id = `more-${s.title.replace(/\W+/g, "-")}`;
+  return `<article class="card ${s.img ? "has-img" : ""}" data-space="${esc(s.title)}">
     ${s.img ? `<img class="thumb" src="${esc(s.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
     <div>
-      <h2 class="title">${esc(s.title)}</h2>
+      <h2 class="title"><button type="button" class="expand" aria-expanded="${open}" aria-controls="${id}">${esc(s.title)}</button></h2>
       <p class="sub">${esc(s.description)}${s.description ? " · " : ""}${esc(s.campus)}${s.seats ? ` · ${s.seats} seats` : ""}</p>
       <p class="sub hours">${hoursLine(s)}</p>
     </div>
@@ -250,7 +295,8 @@ function spaceCard(s) {
         : `<div class="big">${s.pct}%${trend}<small>${s.occupancy != null ? `${s.occupancy} / ${s.max ?? "?"} people` : "approx."}</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
     </div>
     ${s.pct == null ? "" : `<div class="meter ${lvl}" role="img" aria-label="${s.pct}% full"><i style="width:${s.pct}%"></i></div>`}
-    ${feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
+    ${!open && feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}
+    ${open ? spaceDetails(s, id) : ""}
     ${linksRow(s)}
   </article>`;
 }
@@ -379,12 +425,14 @@ function bind() {
     if (a) return STATS.click(a.dataset.how, a.dataset.title, a.dataset.building);
     const go = e.target.closest("[data-goto]");
     if (go) { STATS.act(`hint_${go.dataset.goto}`); showTab(go.dataset.goto); return scrollTo(0, 0); }
-    // The whole room card opens its day schedule (the title button is the keyboard way in).
-    const card = e.target.closest(".card[data-room]");
-    if (!card || e.target.closest("a") || getSelection().toString()) return;
-    const t = card.dataset.room;
-    if (state.opened.delete(t)) return render();
-    state.opened.add(t); STATS.act("schedule"); render();
+    const fd = e.target.closest("[data-fday]");
+    if (fd) { state.fday.set(fd.closest("[data-space]").dataset.space, +fd.dataset.fday); STATS.act("forecast_day"); return render(); }
+    // The whole card opens a room's day schedule or a space's details (the title button is the keyboard way in).
+    const card = e.target.closest(".card[data-room], .card[data-space]");
+    if (!card || e.target.closest("a, .more") || getSelection().toString()) return;
+    const room = card.dataset.room != null, t = room ? card.dataset.room : card.dataset.space, set = room ? state.opened : state.openSpaces;
+    if (set.delete(t)) return render();
+    set.add(t); STATS.act(room ? "schedule" : "details"); render();
   });
   $("#locate").addEventListener("click", () => locate(state.watch == null));
 }

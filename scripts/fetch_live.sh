@@ -17,6 +17,10 @@ fi
 if [ ! -f "$DIR/uzh_spaces.json" ] || [ -n "$(find "$DIR/uzh_spaces.json" -mmin +4)" ]; then
   python3 "$(dirname "$0")/fetch_uzh_live.py" || echo "UZH occupancy fetch failed" >&2
 fi
+# Occupancy history and the forecast built from it: one sample every 10 minutes.
+if [ ! -f "$DIR/forecast.json" ] || [ -n "$(find "$DIR/forecast.json" -mmin +9)" ]; then
+  python3 "$(dirname "$0")/forecast.py" || echo "forecast failed" >&2
+fi
 # A one-off ETH hiccup is fine; only fail (and alert) once the live data is 15+ minutes old.
 if [ ! -f "$DIR/availability.json" ] || [ -n "$(find "$DIR/availability.json" -mmin +15)" ]; then
   echo "live data is stale" >&2
