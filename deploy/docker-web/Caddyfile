@@ -17,6 +17,13 @@
 			header_up X-Real-IP {client_ip}
 		}
 	}
+	# the visitor's own address, for the Wi-Fi room test (site/wifi-test.html)
+	handle /api/whoami {
+		header Cache-Control "no-store"
+		reverse_proxy eth-room-finder-api:8790 {
+			header_up X-Real-IP {client_ip}
+		}
+	}
 	@oldstats path /stats /stats/
 	redir @oldstats /api/stats
 	handle /api/stats* {

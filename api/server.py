@@ -67,6 +67,12 @@ def hit():
     return "", 204
 
 
+@app.get("/api/whoami")
+def whoami():
+    """The address the server sees, for the Wi-Fi room test page (site/wifi-test.html). Nothing is stored."""
+    return {"ip": _ip()}
+
+
 @app.get("/api/stats")
 def stats():
     try:
