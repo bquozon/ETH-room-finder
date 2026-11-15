@@ -265,23 +265,20 @@ function forecast(s) {
   const bars = vals.slice(first, last).map((v, k) => {
     const i = first + k, m = seen(i), h = (x) => `height:${Math.max(x ?? 0, 2)}%`;
     const tip = `${at(i)}: ${m != null ? `${m}%, usually ` : ""}${v == null ? "no data" : `${v}%`}`;
-    const now = i === nowSlot ? " now" : "";
-    return `<span title="${tip}">${m == null ? `<i class="${occupancyLevel(v)}${now}" style="${h(v)}"></i>`
-      : `<i class="usual" style="${h(v)}"></i><i class="${occupancyLevel(m)}${now}" style="${h(m)}"></i>`}</span>`;
+    const today = m == null ? "" : `<i class="${i === nowSlot ? occupancyLevel(m) : "today"}" style="${h(m)}"></i>`;
+    return `<span title="${tip}"><i class="usual" style="${h(v)}"></i>${today}</span>`;
   }).join("");
   const ticks = Array.from({ length: 5 }, (_, k) => `<span>${at(Math.round(first + ((last - first) * k) / 4))}</span>`).join("");
   const perHour = 60 / state.slot, next = nowSlot < 0 ? [] : [1, 2, 3, 4].map((h) => nowSlot + h * perHour).filter((i) => vals[i] != null);
   const live = nowSlot >= 0 && vsUsual(s.pct, vals[nowSlot]);
   const n = f.n[wd], weekend = wd >= 5;
-  const basis = f.basis[wd] === "weekday"
-    ? `Average of the last ${n} ${WEEKDAYS[wd]}s, recent weeks counting most.`
-    : `Average of the last ${n} ${weekend ? "weekend days" : "weekdays"}, recent days counting most (not enough ${WEEKDAYS[wd]}s yet).`;
+  const basis = `${n} ${f.basis[wd] === "weekday" ? WEEKDAYS[wd] : weekend ? "weekend day" : "weekday"}${n > 1 ? "s" : ""}`;
   return `<div class="fc">${head}
     ${live ? `<p class="sub"><b class="${occupancyLevel(s.pct)}">Live: ${s.pct}%, ${live}</b> (usually ${vals[nowSlot]}%)</p>` : ""}
     ${next.length ? `<p class="sub">Next hours: ${next.map((i) => `${at(i)} <b class="${occupancyLevel(vals[i])}">${vals[i]}%</b>`).join(" · ")}</p>` : ""}
     <div class="fc-bars" role="img" aria-label="Predicted occupancy on ${WEEKDAYS[wd]}s from ${at(first)} to ${at(last)}">${bars}</div>
     <div class="ticks">${ticks}</div>
-    <p class="sub">${nowSlot >= 0 ? "Today's measurements, with the usual level as a blue line. " : ""}${basis} Holidays left out.</p>
+    <p class="sub">Usual level from the last ${basis}${nowSlot >= 0 ? ", today so far in dark blue" : ""}.</p>
   </div>`;
 }
 

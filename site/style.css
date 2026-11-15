@@ -127,14 +127,12 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .fc h3 { font-size: 13px; margin: 4px 0 0; }
 .fc-days { display: flex; flex-wrap: wrap; gap: 4px; }
 .fc-days .chip { padding: 3px 9px; font-size: 12px; }
-.fc-bars { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1px solid var(--chip); }
+.fc-bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; border-bottom: 1px solid var(--chip); }
 .fc-bars > span { flex: 1; position: relative; height: 100%; }
-.fc-bars i { position: absolute; bottom: 0; left: 0; right: 0; background: currentColor; border-radius: 2px 2px 0 0; }
-/* today: the measured bar in front of the usual one, which is faint */
-.fc-bars i.usual { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-/* the usual level's top edge, drawn over today's bar so it shows even when today is busier */
-.fc-bars i.usual::after { content: ""; position: absolute; top: -1px; left: -1px; right: -1px; height: 3px; border-radius: 2px; background: var(--accent); z-index: 3; }
-.fc-bars i.now { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+/* like Google Maps: the usual level in light blue, today so far in front in dark blue, now in its live colour */
+.fc-bars i { position: absolute; bottom: 0; left: 0; right: 0; background: currentColor; border-radius: 3px 3px 0 0; }
+.fc-bars i.usual { background: color-mix(in srgb, var(--accent) 25%, var(--card)); }
+.fc-bars i.today { background: color-mix(in srgb, var(--accent) 75%, var(--card)); }
 .big small.vs { color: inherit; font-weight: 600; } /* the colour of the live % (.side's level) */
 .expand { all: unset; cursor: pointer; border-radius: 4px; }
 .expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
