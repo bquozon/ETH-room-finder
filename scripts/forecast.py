@@ -8,7 +8,7 @@ build:  for every space, weekday and half hour, a weighted average of past days,
         - each day weighs 0.5 ** (age in days / HALF_LIFE), so last week counts double the week before;
         - days in special_days.txt (holidays, breaks) are left out.
 Writes {"generated", "slot": 30, "spaces": {id: {"days": [Mon..Sun: [48 pct|null]], "basis": [Mon..Sun: "weekday"|"days"|null],
-"n": [Mon..Sun: past days used]}}}. Ids: ETH roomGlobalIdentifier, "uzh:" + title for UZH.
+"n": [Mon..Sun: past days used]}}, "today": {id: [48 pct|null]}} (today's measurements so far). Ids: ETH roomGlobalIdentifier, "uzh:" + title for UZH.
 """
 import datetime as dt
 import json
@@ -72,25 +72,30 @@ def record(now, history):
             f.write(json.dumps({"t": f"{now:%H:%M}", "p": p}) + "\n")
 
 
-def load(history, today, skip):
-    """{(id, date): {slot: mean pct}} for the last WEEKS weeks, special days left out."""
+def read_day(f):
+    """{id: {slot: mean pct}} from one day's history file ({} if there is none)."""
     sums = defaultdict(lambda: defaultdict(lambda: [0, 0]))
-    for i in range(WEEKS * 7 + 1):
+    for line in f.read_text().splitlines() if f.exists() else []:
+        try:
+            r = json.loads(line)
+            h, m = map(int, r["t"].split(":"))
+        except ValueError:
+            continue  # a line cut off by a crash
+        for k, v in r["p"].items():
+            s = sums[k][(h * 60 + m) // SLOT]
+            s[0] += v
+            s[1] += 1
+    return {k: {slot: t / n for slot, (t, n) in slots.items()} for k, slots in sums.items()}
+
+
+def load(history, today, skip):
+    """{(id, date): {slot: mean pct}} for the last WEEKS weeks before today, special days left out."""
+    out = {}
+    for i in range(1, WEEKS * 7 + 1):  # not today: "usual" must not include the count it is compared with
         day = today - dt.timedelta(i)
-        f = history / f"{day}.jsonl"
-        if day in skip or not f.exists():
-            continue
-        for line in f.read_text().splitlines():
-            try:
-                r = json.loads(line)
-                h, m = map(int, r["t"].split(":"))
-            except ValueError:
-                continue  # a line cut off by a crash
-            for k, v in r["p"].items():
-                s = sums[(k, day)][(h * 60 + m) // SLOT]
-                s[0] += v
-                s[1] += 1
-    return {key: {slot: t / n for slot, (t, n) in slots.items()} for key, slots in sums.items()}
+        if day not in skip:
+            out.update({(k, day): slots for k, slots in read_day(history / f"{day}.jsonl").items()})
+    return out
 
 
 def build(days, today):
@@ -124,8 +129,11 @@ def main():
     record(now, history)
     skip = special_days(SPECIAL.read_text()) if SPECIAL.exists() else set()
     spaces = build(load(history, now.date(), skip), now.date())
+    today = {k: [round(v[i]) if i in v else None for i in range(24 * 60 // SLOT)]
+             for k, v in read_day(history / f"{now.date()}.jsonl").items()}
     tmp = DATA / "forecast.json.tmp"
-    tmp.write_text(json.dumps({"generated": now.isoformat(), "slot": SLOT, "spaces": spaces}, separators=(",", ":")))
+    tmp.write_text(json.dumps({"generated": now.isoformat(), "slot": SLOT, "spaces": spaces, "today": today},
+                              separators=(",", ":")))
     tmp.replace(DATA / "forecast.json")
 
 

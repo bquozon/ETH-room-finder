@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, roomTitle, placeOrder, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
+import { BUILDINGS, campusOf, roomTitle, placeOrder, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, vsUsual, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -110,6 +110,8 @@ async function loadSpaces() {
     getJSON("data/uzh_spaces.json").catch(() => ({ spaces: [] })), // UZH missing: ETH still works
     getJSON("data/forecast.json").catch(() => ({ spaces: {} }))]); // see scripts/forecast.py
   state.slot = fc.slot || 30;
+  // today's measurements so far, unless the file is from yesterday (just after midnight)
+  const measured = fc.generated && new Date(fc.generated).toDateString() === new Date().toDateString() ? fc.today || {} : {};
   const live = new Map(avail.data.map((a) => [a.id, a.attributes]));
   const uzhAt = uzh.generated && new Date(uzh.generated);
   state.spaces = spaces.data.map(({ attributes: a }) => {
@@ -117,7 +119,7 @@ async function loadSpaces() {
     const ok = l.status && l.status !== "unknown" && l.occupancyPercentage != null;
     const features = a.features || [];
     return {
-      kind: "space", uni: "eth", title: a.title, fc: fc.spaces[a.roomGlobalIdentifier], description: a.description, building: a.building,
+      kind: "space", uni: "eth", title: a.title, fc: fc.spaces[a.roomGlobalIdentifier], today: measured[a.roomGlobalIdentifier], description: a.description, building: a.building,
       campus: campusOf(a.building), coord: BUILDINGS[a.building], seats: a.seats,
       link: a.locationPageUrl && ETH + a.locationPageUrl, img: a.image && ETH + a.image,
       has24h: !!a.has24HourAccess, hours: a.hours || [],
@@ -127,7 +129,7 @@ async function loadSpaces() {
     };
   }).concat(uzh.spaces.map((u) => ({
     ...u, kind: "space", uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
-    max: u.seats, updated: u.pct != null ? uzhAt : null, fc: fc.spaces[`uzh:${u.title}`],
+    max: u.seats, updated: u.pct != null ? uzhAt : null, fc: fc.spaces[`uzh:${u.title}`], today: measured[`uzh:${u.title}`],
   })));
   const times = state.spaces.map((s) => s.updated).filter(Boolean);
   state.updated = times.length ? new Date(Math.max(...times)) : null;
@@ -239,33 +241,46 @@ function hoursLine(s) {
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const todayWd = () => (new Date().getDay() + 6) % 7;
+const slotOf = (d) => Math.floor((d.getHours() * 60 + d.getMinutes()) / state.slot);
+
+// One weekday of the forecast, blank while the space is closed (unknown hours keep everything).
+function openSlots(s, wd) {
+  const day = new Date(); day.setDate(day.getDate() + ((wd - todayWd() + 7) % 7));
+  return s.fc.days[wd].map((v, i) => { day.setHours(0, i * state.slot, 0, 0); return openingStatus(s.hours, s.has24h, day).open === false ? null : v; });
+}
 
 // Predicted occupancy over one weekday (scripts/forecast.py), as bars per half hour; today also lists the next hours.
 function forecast(s) {
   const f = s.fc, wd = state.fday.get(s.title) ?? todayWd();
   const chips = WEEKDAYS.map((d, i) => `<button type="button" class="chip" data-fday="${i}" aria-pressed="${i === wd}">${d.slice(0, 3)}</button>`).join("");
-  const head = `<h3>Usually how busy</h3><div class="fc-days">${chips}</div>`;
+  const head = `<h3>Popular times</h3><div class="fc-days">${chips}</div>`;
   if (!f) return `<div class="fc">${head}<p class="sub">No forecast yet: it starts after a day of measurements.</p></div>`;
-  const vals = f.days[wd], have = vals.flatMap((v, i) => (v == null ? [] : [i]));
+  const vals = openSlots(s, wd), have = vals.flatMap((v, i) => (v == null ? [] : [i]));
   if (!have.length) return `<div class="fc">${head}<p class="sub">No measurements on a ${WEEKDAYS[wd]} yet (or it's closed then).</p></div>`;
   const at = (i) => { const m = i * state.slot; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
   const first = have[0], last = have[have.length - 1] + 1, now = new Date();
-  const nowSlot = wd === todayWd() ? Math.floor((now.getHours() * 60 + now.getMinutes()) / state.slot) : -1;
+  const nowSlot = wd === todayWd() ? slotOf(now) : -1;
+  // Today up to now: the measured level (live for the current half hour) in front of the usual one (blue).
+  const seen = (i) => i > nowSlot || vals[i] == null ? null : i === nowSlot && s.pct != null ? s.pct : s.today?.[i] ?? null;
   const bars = vals.slice(first, last).map((v, k) => {
-    const i = first + k;
-    return `<i class="${occupancyLevel(v)}${i < nowSlot ? " past" : ""}${i === nowSlot ? " now" : ""}" style="height:${Math.max(v ?? 0, 2)}%" title="${at(i)}: ${v == null ? "no data" : `${v}%`}"></i>`;
+    const i = first + k, m = seen(i), h = (x) => `height:${Math.max(x ?? 0, 2)}%`;
+    const tip = `${at(i)}: ${m != null ? `${m}%, usually ` : ""}${v == null ? "no data" : `${v}%`}`;
+    return `<span${i === nowSlot ? ' class="now"' : ""} title="${tip}">${m == null ? `<i class="${occupancyLevel(v)}" style="${h(v)}"></i>`
+      : `<i class="usual" style="${h(v)}"></i><i class="${occupancyLevel(m)}" style="${h(m)}"></i>`}</span>`;
   }).join("");
   const ticks = Array.from({ length: 5 }, (_, k) => `<span>${at(Math.round(first + ((last - first) * k) / 4))}</span>`).join("");
   const perHour = 60 / state.slot, next = nowSlot < 0 ? [] : [1, 2, 3, 4].map((h) => nowSlot + h * perHour).filter((i) => vals[i] != null);
+  const live = nowSlot >= 0 && vsUsual(s.pct, vals[nowSlot]);
   const n = f.n[wd], weekend = wd >= 5;
   const basis = f.basis[wd] === "weekday"
     ? `Average of the last ${n} ${WEEKDAYS[wd]}s, recent weeks counting most.`
     : `Average of the last ${n} ${weekend ? "weekend days" : "weekdays"}, recent days counting most (not enough ${WEEKDAYS[wd]}s yet).`;
   return `<div class="fc">${head}
+    ${live ? `<p class="sub"><b class="${occupancyLevel(s.pct)}">Live: ${s.pct}%, ${live}</b> (usually ${vals[nowSlot]}%)</p>` : ""}
     ${next.length ? `<p class="sub">Next hours: ${next.map((i) => `${at(i)} <b class="${occupancyLevel(vals[i])}">${vals[i]}%</b>`).join(" · ")}</p>` : ""}
     <div class="fc-bars" role="img" aria-label="Predicted occupancy on ${WEEKDAYS[wd]}s from ${at(first)} to ${at(last)}">${bars}</div>
     <div class="ticks">${ticks}</div>
-    <p class="sub">${basis} Holidays left out.</p>
+    <p class="sub">${nowSlot >= 0 ? "Today's measurements in front of the usual level (blue). " : ""}${basis} Holidays left out.</p>
   </div>`;
 }
 
@@ -281,6 +296,7 @@ function spaceCard(s) {
   const lvl = occupancyLevel(s.pct);
   const trend = s.trend?.startsWith("incr") ? " ↑" : s.trend?.startsWith("decr") ? " ↓" : "";
   const feats = s.features.filter((f) => ["aus.stromviel", "um.ruhig", "um.laut", "food.mensa", "food.cafeteria", "work.gruppe", "aus.fenster"].includes(f.key));
+  const usual = vsUsual(s.pct, s.fc && openSlots(s, todayWd())[slotOf(new Date())]);
   const open = state.openSpaces.has(s.title), id = `more-${s.title.replace(/\W+/g, "-")}`;
   return `<article class="card ${s.img ? "has-img" : ""}" data-space="${esc(s.title)}">
     ${s.img ? `<img class="thumb" src="${esc(s.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
@@ -292,7 +308,7 @@ function spaceCard(s) {
     <div class="side ${lvl}">
       ${s.pct == null
         ? `<div class="big unknown">?<small>unknown how busy</small></div>`
-        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy != null ? `${s.occupancy} / ${s.max ?? "?"} people` : "approx."}</small>${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
+        : `<div class="big">${s.pct}%${trend}<small>${s.occupancy != null ? `${s.occupancy} / ${s.max ?? "?"} people` : "approx."}</small>${usual ? `<small class="vs">${usual}</small>` : ""}${s.updated ? `<small>counted ${stamp(s.updated)}</small>` : ""}</div>`}
     </div>
     ${s.pct == null ? "" : `<div class="meter ${lvl}" role="img" aria-label="${s.pct}% full"><i style="width:${s.pct}%"></i></div>`}
     ${!open && feats.length ? `<div class="feats">${feats.map((f) => `<span class="feat">${esc(f.label.replace(" | ", ": "))}</span>`).join("")}</div>` : ""}

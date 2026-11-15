@@ -154,4 +154,8 @@ export const placeOrder = (a, b) => rank(b) - rank(a) || (b.seats || 0) - (a.sea
 export const occupancyLevel = (pct) =>
   pct == null ? "unknown" : pct < 50 ? "low" : pct < 80 ? "medium" : "high";
 
+// Live occupancy against the forecast for now, like Google Maps: within 10 points counts as usual.
+export const vsUsual = (pct, usual) => pct == null || usual == null ? null
+  : pct > usual + 10 ? "busier than usual" : pct < usual - 10 ? "less busy than usual" : "as busy as usual";
+
 export const hhmm = (d) => d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });

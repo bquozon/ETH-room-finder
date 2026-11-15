@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from forecast import build, load, special_days  # noqa: E402
+from forecast import build, load, read_day, special_days  # noqa: E402
 
 D = dt.date
 assert special_days("2026-12-24 2026-12-26 Xmas\n# note\n2027-05-17  Whit Monday\n") == \
@@ -40,5 +40,6 @@ with tempfile.TemporaryDirectory() as tmp:
     (h / "2026-11-10.jsonl").write_text(json.dumps({"t": "10:00", "p": {"A": 100}}) + "\n")
     got = load(h, today, {D(2026, 11, 10)})
     assert got == {("A", D(2026, 11, 9)): {slot: 50}, ("B", D(2026, 11, 9)): {slot: 5}}, got
+    assert read_day(h / "2026-11-09.jsonl") == {"A": {slot: 50}, "B": {slot: 5}} and read_day(h / "none.jsonl") == {}
 
 print("forecast ok")

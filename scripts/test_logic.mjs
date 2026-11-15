@@ -1,6 +1,6 @@
 // node scripts/test_logic.mjs
 import assert from "node:assert/strict";
-import { distance, roomStatus, dayTimeline, occupancyLevel, campusOf, formatDistance, openingStatus, shortStay, daySchedule, uniOf, roomTitle, placeOrder } from "../site/logic.js";
+import { distance, roomStatus, dayTimeline, occupancyLevel, vsUsual, campusOf, formatDistance, openingStatus, shortStay, daySchedule, uniOf, roomTitle, placeOrder } from "../site/logic.js";
 
 // HG -> CAB is ~220 m
 const d = distance([47.37642, 8.547995], [47.37837, 8.548801]);
@@ -80,4 +80,6 @@ const { season } = await import("../site/map-style.js");
 const on = (m, d) => season(new Date(2026, m - 1, d));
 assert.deepEqual([on(1, 15), on(2, 28), on(3, 1), on(5, 31), on(6, 1), on(9, 21), on(9, 22), on(11, 30), on(12, 1)],
   ["winter", "winter", "spring", "spring", "summer", "summer", "autumn", "autumn", "winter"]);
+assert.equal(vsUsual(50, 40), "as busy as usual"); assert.equal(vsUsual(51, 40), "busier than usual");
+assert.equal(vsUsual(29, 40), "less busy than usual"); assert.equal(vsUsual(50, null), null); assert.equal(vsUsual(null, 40), null);
 console.log("logic ok");

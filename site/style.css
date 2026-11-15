@@ -128,9 +128,12 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .fc-days { display: flex; flex-wrap: wrap; gap: 4px; }
 .fc-days .chip { padding: 3px 9px; font-size: 12px; }
 .fc-bars { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1px solid var(--chip); }
-.fc-bars > i { flex: 1; background: currentColor; border-radius: 2px 2px 0 0; }
-.fc-bars > i.past { opacity: .35; }
-.fc-bars > i.now { box-shadow: 0 0 0 2px var(--text); }
+.fc-bars > span { flex: 1; position: relative; height: 100%; }
+.fc-bars i { position: absolute; bottom: 0; left: 0; right: 0; background: currentColor; border-radius: 2px 2px 0 0; }
+/* today: the measured bar in front of the usual one, which is faint */
+.fc-bars i.usual { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.fc-bars > span.now { box-shadow: 0 0 0 2px var(--text); border-radius: 2px; }
+.big small.vs { color: inherit; font-weight: 600; } /* the colour of the live % (.side's level) */
 .expand { all: unset; cursor: pointer; border-radius: 4px; }
 .expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .expand::after { content: " ▾"; color: var(--muted); font-size: 12px; display: inline-block; transition: transform .15s; }
