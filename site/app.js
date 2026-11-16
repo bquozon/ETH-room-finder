@@ -243,10 +243,10 @@ const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 const todayWd = () => (new Date().getDay() + 6) % 7;
 const slotOf = (d) => Math.floor((d.getHours() * 60 + d.getMinutes()) / state.slot);
 
-// One weekday of the forecast, blank while the space is closed (unknown hours keep everything).
+// One weekday of the forecast: undefined while the space is closed, null when open without data (unknown hours keep everything).
 function openSlots(s, wd) {
   const day = new Date(); day.setDate(day.getDate() + ((wd - todayWd() + 7) % 7));
-  return s.fc.days[wd].map((v, i) => { day.setHours(0, i * state.slot, 0, 0); return openingStatus(s.hours, s.has24h, day).open === false ? null : v; });
+  return s.fc.days[wd].map((v, i) => { day.setHours(0, i * state.slot, 0, 0); return openingStatus(s.hours, s.has24h, day).open === false ? undefined : v; });
 }
 
 // Predicted occupancy over one weekday (scripts/forecast.py), as bars per half hour; today also lists the next hours.
@@ -255,13 +255,14 @@ function forecast(s) {
   const chips = WEEKDAYS.map((d, i) => `<button type="button" class="chip" data-fday="${i}" aria-pressed="${i === wd}">${d.slice(0, 3)}</button>`).join("");
   const head = `<h3>Popular times</h3><div class="fc-days">${chips}</div>`;
   if (!f) return `<div class="fc">${head}<p class="sub">No forecast yet: it starts after a day of measurements.</p></div>`;
-  const vals = openSlots(s, wd), have = vals.flatMap((v, i) => (v == null ? [] : [i]));
+  const vals = openSlots(s, wd), nowSlot = wd === todayWd() ? slotOf(new Date()) : -1;
+  // Today up to now: the measured level (live for the current half hour) in front of the usual one.
+  const seen = (i) => i > nowSlot || vals[i] === undefined ? null : i === nowSlot && s.pct != null ? s.pct : s.today?.[i] ?? null;
+  // The axis covers today's measurements too, even where there is no usual level yet.
+  const have = vals.flatMap((v, i) => (v == null && seen(i) == null ? [] : [i]));
   if (!have.length) return `<div class="fc">${head}<p class="sub">No measurements on a ${WEEKDAYS[wd]} yet (or it's closed then).</p></div>`;
   const at = (i) => { const m = i * state.slot; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
-  const first = have[0], last = have[have.length - 1] + 1, now = new Date();
-  const nowSlot = wd === todayWd() ? slotOf(now) : -1;
-  // Today up to now: the measured level (live for the current half hour) in front of the usual one (faint blue, with a line on top).
-  const seen = (i) => i > nowSlot || vals[i] == null ? null : i === nowSlot && s.pct != null ? s.pct : s.today?.[i] ?? null;
+  const first = have[0], last = have[have.length - 1] + 1;
   const bars = vals.slice(first, last).map((v, k) => {
     const i = first + k, m = seen(i), h = (x) => `height:${Math.max(x ?? 0, 2)}%`;
     const tip = `${at(i)}: ${m != null ? `${m}%, usually ` : ""}${v == null ? "no data" : `${v}%`}`;
