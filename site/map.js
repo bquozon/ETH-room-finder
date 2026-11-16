@@ -115,7 +115,7 @@ for (const r of roomData.rooms) add(roomsBy, r.building, { ...r, status: roomSta
 function spacesPin(xs) {
   const known = xs.filter((s) => s.open !== false && s.pct != null).map((s) => s.pct);
   const best = known.length ? Math.min(...known) : null;
-  return [occupancyLevel(best), best != null ? ` · ${best}%` : "", best != null ? 100 - best : -1, xs.map((s) => `<li><span>${esc(s.title)}<small>${esc(s.description)}</small></span>
+  return [occupancyLevel(best), best != null ? ` · ${best}%` : "", best != null ? 100 - best : -1, xs.map((s) => `<li><span><a href="./#space=${esc(encodeURIComponent(s.title))}">${esc(s.title)}</a><small>${esc(s.description)}</small></span>
     <b class="${s.open === false ? "high" : occupancyLevel(s.pct)}">${s.open === false ? "Closed" : s.pct == null ? "? unknown" : s.pct + "%"}</b></li>`)];
 }
 function roomsPin(xs) {

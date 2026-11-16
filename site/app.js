@@ -487,6 +487,13 @@ async function main() {
     console.error(e);
     return;
   }
+  // From a map popup (map.html → ./#space=<title>): that space alone, details open, whatever the chips say.
+  const from = decodeURIComponent(location.hash.match(/^#space=(.+)/)?.[1] ?? "");
+  if (from) {
+    Object.assign(state, { tab: "spaces", q: from, on: { ...state.on, spaces: [] } });
+    $("#q").value = from; state.openSpaces.add(from);
+    history.replaceState(null, "", location.pathname);
+  }
   render();
   // Resume "near me" without a prompt if the user already granted it.
   if (store.get("locate", false)) {
