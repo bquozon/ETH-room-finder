@@ -129,6 +129,10 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 .fc-days .chip { padding: 3px 9px; font-size: 12px; }
 .fc-bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; border-bottom: 1px solid var(--chip); }
 .fc-bars > span { flex: 1; position: relative; height: 100%; }
+.fc-bars { position: relative; margin-top: 6px; }
+/* the scale: a dashed line at 100%, labelled on the right */
+.fc-bars::before { content: ""; position: absolute; inset: 0 0 auto; border-top: 1px dashed var(--line); }
+.fc-bars::after { content: "100%"; position: absolute; top: -6px; right: 0; padding-left: 4px; font-size: 10px; line-height: 1; color: var(--muted); background: var(--card); z-index: 1; }
 /* like Google Maps: the usual level in light blue, today so far in front in dark blue, now in its live colour */
 .fc-bars i { position: absolute; bottom: 0; left: 0; right: 0; background: currentColor; border-radius: 3px 3px 0 0; }
 .fc-bars i.usual { background: color-mix(in srgb, var(--accent) 25%, var(--card)); }
