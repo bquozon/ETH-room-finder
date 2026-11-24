@@ -1,4 +1,4 @@
-import { BUILDINGS, campusOf, roomTitle, placeOrder, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, vsUsual, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
+import { BUILDINGS, campusOf, uniOf, roomTitle, placeOrder, distance, formatDistance, roomStatus, dayTimeline, occupancyLevel, vsUsual, hhmm, openingStatus, walkMinutes, shortStay, daySchedule, esc, getJSON } from "./logic.js";
 
 const ETH = "https://ethz.ch";
 const $ = (s) => document.querySelector(s);
@@ -128,7 +128,7 @@ async function loadSpaces() {
       updated: ok && l.timestamp ? new Date(l.timestamp) : null,
     };
   }).concat(uzh.spaces.map((u) => ({
-    ...u, kind: "space", uni: "uzh", campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
+    ...u, kind: "space", uni: uniOf(u.building), campus: campusOf(u.building), coord: BUILDINGS[u.building], features: [], keys: new Set(),
     max: u.seats, updated: u.pct != null ? uzhAt : null, fc: fc.spaces[`uzh:${u.title}`], today: measured[`uzh:${u.title}`],
   })));
   const times = state.spaces.map((s) => s.updated).filter(Boolean);

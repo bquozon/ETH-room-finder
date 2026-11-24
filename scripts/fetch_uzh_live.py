@@ -59,6 +59,10 @@ UNMEASURED = [
     ("UB Egyptology", "UZH library", "TEL", None, "", []),
     ("UB Ethics", "UZH library", "ZOA", None, "", []),
     ("Language Center self-study centre", "UZH study room", "RAI", None, "", []),
+    # ETH's own study-space feed leaves it out. shortcut: weekday hours only (math.ethz.ch/library/opening-hours.html
+    # adds weekends in exam session, e.g. 9 Jan – 14 Feb 2027 09.00 - 17.00); edit hours if that matters.
+    ("MathBib", "ETH Mathematics Library", "HG", None,
+     "https://ethz.ch/en/utils/location.html?building=HG&floor=G&room=7", ["Mon - Fri: 08.00 - 20.00", "Sat - Sun: Closed"]),
 ] + [(room, "UZH study room" + extra, room.split("-")[0], None, "", []) for room, extra in [
     ("KIR-3-303", ""), ("PET--1-3", ""), ("PET--1-4", ""), ("PET--1-4C", ""), ("PET--1-4E", ""), ("PLF-C-105", ""),
     ("PLG-A-001", ""), ("RAA-D-29", ""), ("RAF-1-104", ""), ("RAF-1-105", ""), ("RAI-D-011", ", with computers"),
